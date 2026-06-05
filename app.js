@@ -219,7 +219,7 @@
   var SRS_MASTER = SRS_INTERVALS.length;    // 6 级 → 毕业到已掌握
 
   // 阅读设置：可选档位 → 实际值
-  var SETTINGS_DEFAULT = { fontSize: 'm', lineHeight: 'm', pageWidth: 'm', theme: 'paper', highlight: true, anim: true, readMode: 'paged', autoKnown: true, sound: true, valorantRank: false, syncAuto: false };
+  var SETTINGS_DEFAULT = { fontSize: 'm', lineHeight: 'm', pageWidth: 'm', theme: 'paper', highlight: true, anim: true, readMode: 'paged', autoKnown: true, sound: true, valorantRank: false, syncAuto: false, syncArticles: false };
   var FS_MAP = { s: '16px', m: '18px', l: '21px', xl: '24px' };
   var LH_MAP = { s: '1.5', m: '1.7', l: '1.95' };
   var PW_MAP = { s: '640px', m: '768px', l: '900px' };
@@ -1071,7 +1071,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.0 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.1 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1089,7 +1089,7 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.0 · local</span></div>' +
+      '<span class="ver font-mono">1.8.1 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
@@ -1147,7 +1147,7 @@
         '<button class="btn-pill ghost-pill" id="set-sync-push">立即上传</button>' +
         '<button class="btn-pill ghost-pill" id="set-sync-pull">立即拉取</button>' +
         '<button class="btn-pill ghost-pill" id="cloud-disconnect">断开</button>' +
-      '</div>' + toggleRow('自动同步', 'syncAuto');
+      '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文，占空间大）', 'syncArticles');
   }
   function renderFirebaseSync(m) {
     var signedIn = !!(m.fbConfig && m.fbUid);
@@ -1158,7 +1158,7 @@
           '<button class="btn-pill ghost-pill" id="set-sync-push">立即上传</button>' +
           '<button class="btn-pill ghost-pill" id="set-sync-pull">立即拉取</button>' +
           '<button class="btn-pill ghost-pill" id="fb-signout">退出登录</button>' +
-        '</div>' + toggleRow('自动同步', 'syncAuto');
+        '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文，占空间大）', 'syncArticles');
     }
     return '<p class="cloud-hint font-cjk">在 Firebase 控制台建项目 → 开 Firestore + 谷歌登录 → 复制 firebaseConfig 粘进下框，保存后用谷歌登录。具体步骤见同步指南。</p>' +
       '<textarea class="cloud-input font-mono" id="fb-config" rows="6" placeholder="粘贴 firebaseConfig = { apiKey: \'...\', authDomain: \'...\', projectId: \'...\', appId: \'...\' }">' + (m.fbConfig ? esc(JSON.stringify(m.fbConfig, null, 0)) : '') + '</textarea>' +
@@ -3193,6 +3193,11 @@
   }
 
   // ---------- 导出/导入 ----------
+  function cloudPayload() {
+    var p = backupPayload();
+    if (!(state.settings && state.settings.syncArticles)) { delete p.articles; delete p.readProgress; } // 云端默认不传文章正文，避免超 1MB
+    return p;
+  }
   function backupPayload() {
     updateReadingProgress(true);
     var meta = ensureSyncMeta();
@@ -3234,11 +3239,11 @@
       (Array.isArray(d.known) ? d.known.length : 0) + ' 个已掌握词';
     if (ask && !confirm('导入将覆盖当前的全部文章和单词。\n\n将导入：' + summary + '\n\n确定继续吗？建议先导出当前数据做备份。')) return false;
     syncApplying = true;
-    state.articles = Array.isArray(d.articles) ? d.articles : [];
+    if (Array.isArray(d.articles)) state.articles = d.articles; // 同步包不含文章时，保留本机文章
     state.articles.forEach(function (art) { if (!art.book) art.book = art.title || '未命名'; });
     state.vocabulary = Array.isArray(d.vocabulary) ? d.vocabulary : [];
     state.known = Array.isArray(d.known) ? d.known : [];
-    state.readProgress = d.readProgress && typeof d.readProgress === 'object' ? d.readProgress : {};
+    if (d.readProgress && typeof d.readProgress === 'object') state.readProgress = d.readProgress;
     state.customBooks = Array.isArray(d.customBooks) ? d.customBooks : [];
     state.customBooks.forEach(function (b) { if (!Array.isArray(b.words)) b.words = []; });
     state.stats = (d.stats && typeof d.stats === 'object') ? d.stats : defaultStats();
@@ -3483,7 +3488,7 @@
     });
   }
   function syncPush() {
-    postSyncPayload(backupPayload()).then(function () {
+    postSyncPayload(cloudPayload()).then(function () {
       alert('已上传到云端存档。');
     }).catch(function (e) {
       alert((e && e.message) ? e.message : '上传失败，请检查同步码 / Master Key / 网络。');
@@ -3513,7 +3518,7 @@
       var meta = ensureSyncMeta();
       var localStamp = meta.localUpdatedAt || 0;
       if (!remote) {
-        if (hasLocalSyncData()) return postSyncPayload(backupPayload());
+        if (hasLocalSyncData()) return postSyncPayload(cloudPayload());
         return null;
       }
       var remoteStamp = syncStamp(remote);
@@ -3521,7 +3526,7 @@
         return applyBackupData(remote, false, { silent: true, fromSync: true });
       }
       if (localStamp > remoteStamp + 800 && hasLocalSyncData()) {
-        return postSyncPayload(backupPayload());
+        return postSyncPayload(cloudPayload());
       }
       meta.lastSyncedAt = Date.now();
       saveSyncMeta();
@@ -3653,7 +3658,7 @@
         return fetchSyncBackup();
       }).then(function (d) {
         if (d) applyBackupData(d, true);            // 云端已有存档 → 拉取（确认覆盖本机）
-        else postSyncPayload(backupPayload());      // 云端为空 → 上传本机
+        else postSyncPayload(cloudPayload());      // 云端为空 → 上传本机
         render();
       }).catch(function (e) {
         render();
