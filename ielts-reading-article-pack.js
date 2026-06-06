@@ -1,0 +1,8 @@
+window.LEXIS_IELTS_ARTICLE_PACK = {
+  type: "lexis_article_pack",
+  title: "剑桥雅思阅读本地文章包",
+  version: 1,
+  publicStub: true,
+  articles: []
+};
+

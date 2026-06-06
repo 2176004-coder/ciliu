@@ -243,6 +243,7 @@
     settings: null,
     showSettings: false,
     showRankGuide: false,
+    rankUp: null,
     transExpanded: false,
     readProgress: {},
     articlePage: 0,
@@ -973,8 +974,10 @@
     });
     var added = Object.keys(toAdd);
     if (!added.length) return 0;
+    var beforeRankCount = state.known.length;
     added.forEach(function (lem) { state.known.push(lem); });
     saveKnown();
+    maybeShowRankUp(beforeRankCount);
     return added.length;
   }
   // 标记「当前页」(仅翻页模式) —— 离开本页/本章前调用
@@ -1071,7 +1074,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.1 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.2 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1089,7 +1092,7 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.1 · local</span></div>' +
+      '<span class="ver font-mono">1.8.2 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
@@ -1111,6 +1114,7 @@
     if (state.selected) html += renderPanel();
     if (state.showSettings) html += renderSettings();
     if (state.showRankGuide) html += renderRankGuide();
+    if (state.rankUp) html += renderRankUp();
 
     app.innerHTML = html;
     bind();
@@ -1210,12 +1214,14 @@
     return '<button class="tab' + (state.tab === key ? ' active' : '') + '" data-tab="' + key + '">' + icon + label + '</button>';
   }
 
-  var IELTS_SHELF = '雅思阅读合集';
+  var IELTS_SHELF = '剑桥雅思阅读合集';
   function rawBookName(a) {
     return (a && (a.book || a.title)) || '未分类';
   }
   function ieltsNumberFromBook(name) {
-    var m = String(name || '').match(/Cambridge\s+IELTS\s+(\d+)\s+Reading/i);
+    var m = String(name || '').match(/Cambridge\s+IELTS\s+(\d+)\s+Reading/i) ||
+      String(name || '').match(/剑桥雅思(?:真题)?\s*(\d+)/i) ||
+      String(name || '').match(/IELTS\s+(\d+)/i);
     return m ? parseInt(m[1], 10) : 0;
   }
   function isIeltsBookName(name) {
@@ -1230,13 +1236,23 @@
   }
   function sectionNameForArticle(a) {
     var raw = rawBookName(a);
-    return isIeltsBookName(raw) ? raw : '';
+    var n = ieltsNumberFromBook(raw);
+    return n ? ('剑桥雅思 ' + n) : '';
+  }
+  function ieltsTestPassageFromArticle(a) {
+    var s = String((a && a.title) || '') + ' ' + String((a && a.id) || '') + ' ' + String((a && a.source) || '');
+    var m = s.match(/Test\s*([1-4])\s*[-–—_: ]+\s*Passage\s*([123])/i) ||
+      s.match(/t([1-4])[_-]p([123])/i);
+    return m ? { test: parseInt(m[1], 10), passage: parseInt(m[2], 10) } : { test: 99, passage: 99 };
   }
   function compareChaptersForShelf(x, y) {
     var sx = sectionNameForArticle(x), sy = sectionNameForArticle(y);
     if (sx || sy) {
       var nx = ieltsNumberFromBook(sx), ny = ieltsNumberFromBook(sy);
       if (nx !== ny) return nx - ny;
+      var tx = ieltsTestPassageFromArticle(x), ty = ieltsTestPassageFromArticle(y);
+      if (tx.test !== ty.test) return tx.test - ty.test;
+      if (tx.passage !== ty.passage) return tx.passage - ty.passage;
     }
     return (x.createdAt || 0) - (y.createdAt || 0);
   }
@@ -1999,9 +2015,7 @@
     return major.charAt(0) + (tier || ''); // 黑1 / 钻3 / 赋
   }
 
-  function masteryRank() {
-    var count = state.known.length;
-    var game = !!(state.settings && state.settings.valorantRank);
+  function rankForCount(count, game) {
     var ranks = game ? VALORANT_RANKS : RANKS;
     var rank = ranks[0];
     for (var i = 0; i < ranks.length; i++) {
@@ -2022,6 +2036,31 @@
       color: rankColor(rank.code, game),
       badge: rankBadge(rank.code, game)
     };
+  }
+
+  function masteryRank() {
+    return rankForCount(state.known.length, !!(state.settings && state.settings.valorantRank));
+  }
+
+  function rankFullName(rank) {
+    return rank.code + (rank.name ? ' · ' + rank.name : '');
+  }
+
+  function maybeShowRankUp(beforeCount) {
+    if (state.booting || syncApplying) return;
+    var afterCount = state.known.length;
+    if (afterCount <= beforeCount) return;
+    var game = !!(state.settings && state.settings.valorantRank);
+    var before = rankForCount(beforeCount, game);
+    var to = rankForCount(afterCount, game);
+    if (before.code === to.code) return;
+    state.rankUp = {
+      from: before,
+      to: to,
+      gained: afterCount - beforeCount,
+      at: Date.now()
+    };
+    sfxRankUp();
   }
 
   function renderRankCard(rank) {
@@ -2093,6 +2132,27 @@
         (cur.game ? renderValorantRankGuide(cur) : renderLearningRankGuide(cur)) +
       '</div></div></div>';
   }
+
+  function renderRankUp() {
+    var up = state.rankUp;
+    if (!up || !up.to) return '';
+    var cur = up.to;
+    var c = cur.color || 'var(--accent)';
+    var title = cur.game ? '段位晋升' : '词汇水平提升';
+    var next = cur.next ? '下一目标 ' + cur.next + ' 词，还差 ' + cur.need + ' 词。' : '已到最高档，继续扩大阅读面。';
+    return '<div class="set-mask rank-up-mask" id="rank-up-mask"><div class="rank-up-card font-cjk" style="--rk:' + c + '">' +
+      '<button class="icon-btn rank-up-x" id="rank-up-close" title="关闭">' + I.x + '</button>' +
+      '<div class="rank-up-kicker">' + esc(title) + '</div>' +
+      '<div class="rank-up-emblem font-display" style="background:' + c + '">' + esc(cur.badge) + '</div>' +
+      '<h2 class="font-display">' + esc(rankFullName(cur)) + '</h2>' +
+      '<p class="rank-up-summary">已掌握 <b>' + cur.count + '</b> 词，本次新增 <b>' + up.gained + '</b> 词。</p>' +
+      '<div class="rank-up-flow"><span>' + esc(rankFullName(up.from)) + '</span><b>→</b><span style="color:' + c + '">' + esc(rankFullName(cur)) + '</span></div>' +
+      '<div class="rank-bar rank-up-bar"><span style="width:' + cur.pct + '%;background:' + c + '"></span></div>' +
+      '<p class="rank-up-next">' + esc(next) + '</p>' +
+      '<div class="rank-up-actions"><button class="btn-ghost" id="rank-up-guide">查看段位</button><button class="btn-pill" id="rank-up-continue">继续阅读</button></div>' +
+      '</div></div>';
+  }
+
 
   function reviewBookWords(id) {
     if (!id || id === 'all') return null;
@@ -2616,10 +2676,12 @@
   function markKnown() {
     var sel = state.selected; if (!sel) return;
     var lemma = lemmaOf(sel);
+    var beforeRankCount = state.known.length;
     state.vocabulary = state.vocabulary.filter(function (v) { return v.lemma.toLowerCase() !== lemma; });
     if (state.known.map(function (l) { return String(l).toLowerCase(); }).indexOf(lemma) < 0) state.known.push(lemma);
     sel.handled = true;
     saveVocab(); saveKnown();
+    maybeShowRankUp(beforeRankCount);
     state.selected = null; state.lookup = null; render();
   }
 
@@ -2646,10 +2708,16 @@
     };
   }
   // 生词 → 已掌握（按原形）
-  function graduateLemma(lemma) {
+  function graduateLemma(lemma, opts) {
     var ll = String(lemma).toLowerCase();
+    var beforeRankCount = state.known.length;
+    var added = false;
     state.vocabulary = state.vocabulary.filter(function (v) { return v.lemma.toLowerCase() !== ll; });
-    if (state.known.map(function (l) { return String(l).toLowerCase(); }).indexOf(ll) < 0) state.known.push(ll);
+    if (state.known.map(function (l) { return String(l).toLowerCase(); }).indexOf(ll) < 0) {
+      state.known.push(ll);
+      added = true;
+    }
+    if (added && !(opts && opts.silentRankUp)) maybeShowRankUp(beforeRankCount);
   }
   // 已掌握 → 生词
   function knownToLearning(lemma) {
@@ -2693,6 +2761,7 @@
     if (type === 'clear') { clearSel(); render(); return; }
     if (type === 'review') { reviewSelected('flash'); return; }
     var keys = Object.keys(state.vocabSel).filter(function (k) { return state.vocabSel[k]; });
+    var beforeRankCount = state.known.length;
     keys.forEach(function (k) {
       if (k.indexOf('known:') === 0) {
         var lemma = k.slice(6);
@@ -2700,11 +2769,12 @@
         else if (type === 'delete') state.known = state.known.filter(function (l) { return String(l).toLowerCase() !== lemma; });
       } else {
         var entry = state.vocabulary.find(function (v) { return v.id === k; });
-        if (type === 'graduate') { if (entry) graduateLemma(entry.lemma); }
+        if (type === 'graduate') { if (entry) graduateLemma(entry.lemma, { silentRankUp: true }); }
         else if (type === 'delete') state.vocabulary = state.vocabulary.filter(function (v) { return v.id !== k; });
       }
     });
     clearSel();
+    if (type === 'graduate') maybeShowRankUp(beforeRankCount);
     saveVocab(); saveKnown(); render();
   }
 
@@ -3131,6 +3201,13 @@
   function sfxWrong() { if (!soundOn()) return; tone(196, 0, 0.24, 'sawtooth', 0.1); tone(155, 0.07, 0.26, 'sawtooth', 0.09); } // 低沉嗡音
   function sfxDud() { if (!soundOn()) return; tone(294, 0, 0.16, 'triangle', 0.1); } // 中性短音（不认识）
   function sfxFlip() { if (!soundOn()) return; tone(520, 0, 0.05, 'triangle', 0.07); tone(380, 0.05, 0.06, 'triangle', 0.06); } // 翻卡轻响
+  function sfxRankUp() {
+    if (!soundOn()) return;
+    tone(523, 0, 0.12, 'sine', 0.14);
+    tone(659, 0.09, 0.14, 'sine', 0.14);
+    tone(784, 0.2, 0.16, 'triangle', 0.15);
+    tone(1046, 0.36, 0.26, 'triangle', 0.12);
+  }
 
   function flipCard() { var r = state.review; if (r) { sfxFlip(); r.phase = 'back'; render(); } }
   function flashKnow() {
@@ -3269,7 +3346,7 @@
     saveSyncMeta();
     lemmaCache = {};
     state.currentArticleId = null; state.currentBook = null; state.composing = false; state.selected = null; state.lookup = null;
-    state.bookOpen = null; state.composingBook = false; state.addWordsTo = null; state.showSettings = false; state.showRankGuide = false;
+    state.bookOpen = null; state.composingBook = false; state.addWordsTo = null; state.showSettings = false; state.showRankGuide = false; state.rankUp = null;
     saveArticles(); saveVocab(); saveKnown(); saveProgress(); saveCustomBooks(); saveStats(); render();
     syncApplying = false;
     if (!opts.silent) alert('导入成功：' + summary + '。');
@@ -3353,6 +3430,10 @@
     getBundledIeltsPack().then(function (d) {
       if (!d) throw new Error('没有找到雅思阅读文章包');
       if (!d || d.type !== 'lexis_article_pack') throw new Error('文章包格式不对');
+      if (!Array.isArray(d.articles) || !d.articles.length) {
+        alert('公开版没有内置真题全文。请先运行 tools/make_ielts_pack.py 生成本地私用包，然后点「导入」选择 private/ielts-reading-article-pack.local.json。');
+        return false;
+      }
       importArticlePackData(d, true);
     }).catch(function (e) {
       alert((e && e.message ? e.message : '导入失败') + '。也可以点「导入」，手动选择 lexis-app/ielts-reading-article-pack.json。');
@@ -3583,6 +3664,10 @@
     if ($('rank-guide-open')) $('rank-guide-open').addEventListener('click', function () { state.showRankGuide = true; render(); });
     if ($('rank-guide-close')) $('rank-guide-close').addEventListener('click', function () { state.showRankGuide = false; render(); });
     if ($('rank-mask')) $('rank-mask').addEventListener('click', function (e) { if (e.target === this) { state.showRankGuide = false; render(); } });
+    if ($('rank-up-close')) $('rank-up-close').addEventListener('click', function () { state.rankUp = null; render(); });
+    if ($('rank-up-continue')) $('rank-up-continue').addEventListener('click', function () { state.rankUp = null; render(); });
+    if ($('rank-up-guide')) $('rank-up-guide').addEventListener('click', function () { state.rankUp = null; state.showRankGuide = true; render(); });
+    if ($('rank-up-mask')) $('rank-up-mask').addEventListener('click', function (e) { if (e.target === this) { state.rankUp = null; render(); } });
     document.querySelectorAll('[data-set]').forEach(function (b) {
       b.addEventListener('click', function () { setSetting(b.getAttribute('data-set'), b.getAttribute('data-val')); });
     });
@@ -3696,6 +3781,7 @@
         turnPage(b.getAttribute('data-page') === 'next' ? 1 : -1);
       });
     });
+    bindPageSwipe();
 
     document.querySelectorAll('[data-openbook]').forEach(function (c) {
       c.addEventListener('click', function () { state.currentBook = c.getAttribute('data-openbook'); state.currentArticleId = null; render(); });
@@ -3930,8 +4016,62 @@
   }, true);
   // 滚动时关闭浮窗，避免它与单词错位
   window.addEventListener('scroll', function () { if (state.selected) closePanel(); scheduleProgressSave(); }, true);
+  function canTurnByGesture() {
+    return state.tab === 'reading' && !state.composing && !!state.currentArticleId && !state.selected &&
+      !state.showSettings && !state.showRankGuide && !state.rankUp && isPaged();
+  }
+  function isInteractiveGestureTarget(el) {
+    if (!el || !el.closest) return false;
+    return !!el.closest('button,input,textarea,select,a,.popover,.drawer,.set-card,.rank-guide-card,.rank-up-card');
+  }
+
+  var swipe = { active: false, x: 0, y: 0, t: 0, horizontal: false };
+  function bindPageSwipe() {
+    var shell = document.querySelector('.page-shell');
+    if (!shell) return;
+    shell.addEventListener('touchstart', function (e) {
+      if (!canTurnByGesture() || e.touches.length !== 1 || isInteractiveGestureTarget(e.target)) return;
+      var t = e.touches[0];
+      swipe.active = true;
+      swipe.horizontal = false;
+      swipe.x = t.clientX;
+      swipe.y = t.clientY;
+      swipe.t = Date.now();
+    }, { passive: true });
+    shell.addEventListener('touchmove', function (e) {
+      if (!swipe.active || !e.touches.length) return;
+      var t = e.touches[0];
+      var dx = t.clientX - swipe.x;
+      var dy = t.clientY - swipe.y;
+      var ax = Math.abs(dx), ay = Math.abs(dy);
+      if (ay > 20 && ay > ax * 1.25) { swipe.active = false; return; }
+      if (ax > 12 && ax > ay * 1.15) {
+        swipe.horizontal = true;
+        if (e.cancelable) e.preventDefault();
+      }
+    }, { passive: false });
+    shell.addEventListener('touchend', function (e) {
+      if (!swipe.active) return;
+      var t = e.changedTouches && e.changedTouches[0];
+      var dx = t ? t.clientX - swipe.x : 0;
+      var dy = t ? t.clientY - swipe.y : 0;
+      var elapsed = Date.now() - swipe.t;
+      var ax = Math.abs(dx), ay = Math.abs(dy);
+      var shouldTurn = swipe.horizontal && ax >= 44 && ax > ay * 1.25 && elapsed < 1200;
+      swipe.active = false;
+      swipe.horizontal = false;
+      if (!shouldTurn || !canTurnByGesture()) return;
+      if (e.cancelable) e.preventDefault();
+      turnPage(dx < 0 ? 1 : -1);
+    }, { passive: false });
+    shell.addEventListener('touchcancel', function () {
+      swipe.active = false;
+      swipe.horizontal = false;
+    }, { passive: true });
+  }
+
   window.addEventListener('wheel', function (e) {
-    if (state.tab !== 'reading' || state.composing || !state.currentArticleId || state.selected || state.showSettings || !isPaged()) return;
+    if (!canTurnByGesture()) return;
     e.preventDefault();
     var now = Date.now();
     if (now < state.wheelLock || Math.abs(e.deltaY) < 12) return;
@@ -3950,7 +4090,7 @@
   });
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && state.showSettings) { state.showSettings = false; render(); return; }
-    if (state.tab !== 'reading' || state.composing || !state.currentArticleId || state.selected || state.showSettings || !isPaged()) return;
+    if (!canTurnByGesture()) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); turnPage(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); turnPage(-1); }
   });
