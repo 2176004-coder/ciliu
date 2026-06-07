@@ -235,6 +235,7 @@
     vocabTab: 'learning', vocabSearch: '', vocabSort: 'recent', vocabSel: {}, searchInLib: true,
     bookOpen: null, bookTab: 'unlearned', bookShowLimit: 500,
     customBooks: [], composingBook: false, newBookName: '', newBookWords: '', addWordsTo: null,
+    composingStudySet: false, newStudySetName: '', newStudySetWords: '',
     stats: null, reviewView: 'home',
     autoSpeak: true,
     review: null,
@@ -596,6 +597,39 @@
     state.customBooks.unshift(book);
     saveCustomBooks();
     return book;
+  }
+  function ensureLearningWords(words) {
+    var known = knownSet(), have = {};
+    state.vocabulary.forEach(function (v) { have[String(v.lemma).toLowerCase()] = 1; });
+    var added = 0;
+    words.forEach(function (w) {
+      var ll = String(w || '').toLowerCase();
+      if (!ll || known.has(ll) || have[ll]) return;
+      state.vocabulary.unshift(makeVocabFromLemma(ll));
+      have[ll] = 1;
+      added++;
+    });
+    if (added) saveVocab();
+    return added;
+  }
+  function createStudySetFromReview() {
+    var nameEl = document.getElementById('study-set-name');
+    var wordsEl = document.getElementById('study-set-words');
+    if (nameEl) state.newStudySetName = nameEl.value;
+    if (wordsEl) state.newStudySetWords = wordsEl.value;
+    var words = parseWordList(state.newStudySetWords);
+    if (!words.length) { alert('先粘贴一些单词，再创建学习集。'); return; }
+    var book = createCustomBook(state.newStudySetName, state.newStudySetWords);
+    var added = ensureLearningWords(words);
+    if (!state.stats) state.stats = defaultStats();
+    state.stats.reviewBook = book.id;
+    saveStats();
+    state.composingStudySet = false;
+    state.newStudySetName = '';
+    state.newStudySetWords = '';
+    state.reviewView = 'home';
+    render();
+    if (!added) setTimeout(function () { alert('学习集已创建；这些词可能已经在生词库或已掌握里。'); }, 0);
   }
   function addWordsToBook(id, text) {
     var book = getCustomBook(id); if (!book) return 0;
@@ -1096,7 +1130,7 @@
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
-        tabBtn('review', '学习集', I.sparkles) +
+        tabBtn('review', '复习', I.sparkles) +
         '<span style="width:8px"></span>' +
         '<button class="icon-btn" id="btn-settings" title="阅读设置">' + I.settings + '</button>' +
         (TTS_OK ? '<button class="icon-btn" id="btn-autospeak" title="' + (state.autoSpeak ? '点词自动朗读：开' : '点词自动朗读：关') + '" style="' + (state.autoSpeak ? 'color:var(--accent)' : 'opacity:0.55') + '">' + (state.autoSpeak ? I.volume : I.volumeX) + '</button>' : '') +
@@ -1196,7 +1230,7 @@
         toggleRow('翻页时未标记词记为已掌握', 'autoKnown') +
         toggleRow('显示生词高亮', 'highlight') +
         toggleRow('翻页动画', 'anim') +
-        toggleRow('学习集音效', 'sound') +
+        toggleRow('复习音效', 'sound') +
         toggleRow('瓦罗兰特段位', 'valorantRank') +
         toggleRow('点词自动朗读', 'autoSpeak', true) +
         '<div class="set-row"><span class="set-label font-cjk">本地备份</span><div class="set-actions">' +
@@ -2182,7 +2216,7 @@
     var opts = [{ id: 'all', name: '全部生词', count: state.vocabulary.length }];
     state.customBooks.forEach(function (b) {
       var c = reviewBookCount(b.id);
-      if (c > 0) opts.push({ id: b.id, name: b.name || '未命名词书', count: c });
+      if (c > 0 || (b.words && b.words.length)) opts.push({ id: b.id, name: b.name || '未命名学习集', count: c });
     });
     BOOKS.forEach(function (b) {
       var c = reviewBookCount(b.tag);
@@ -2236,6 +2270,21 @@
     return html;
   }
 
+  function renderStudySetComposer() {
+    return '<div class="studyset-form">' +
+      '<div class="studyset-form-head">' +
+        '<div><div class="study-kicker font-cjk">新建学习集</div>' +
+        '<h3 class="font-display">粘贴一组词，马上开始练</h3></div>' +
+        '<button class="btn-ghost" id="study-set-cancel">' + I.x + '取消</button>' +
+      '</div>' +
+      '<input class="input-title font-display" id="study-set-name" placeholder="学习集名称，如 雅思错词 / 剑20 Test 1" value="' + esc(state.newStudySetName) + '">' +
+      '<textarea class="compose font-reading" id="study-set-words" placeholder="每行一个单词，也可以用逗号分隔。创建后会自动加入生词库并选中这个学习集。">' + esc(state.newStudySetWords) + '</textarea>' +
+      '<div class="row" style="justify-content:flex-end;margin-top:14px;gap:10px">' +
+        '<button class="btn-ghost" id="study-set-cancel-2">取消</button>' +
+        '<button class="btn-pill" id="study-set-create"' + (parseWordList(state.newStudySetWords).length ? '' : ' disabled') + '>' + I.check + '创建学习集</button>' +
+      '</div></div>';
+  }
+
   function renderReview() {
     var r = state.review;
     if (r) {
@@ -2249,12 +2298,19 @@
     var rank = masteryRank();
     var out = '<div class="wrap" style="padding-top:32px;padding-bottom:32px">' +
       '<div class="row between" style="margin-bottom:18px">' +
-        '<h2 class="page-title font-display" style="margin:0">学习集</h2>' +
-        '<button class="btn-ghost" id="rev-stats">' + I.sparkles + '学习记录</button>' +
+        '<h2 class="page-title font-display" style="margin:0">复习</h2>' +
+        '<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">' +
+          '<button class="btn-ghost" id="study-set-new">' + I.plus + '新建学习集</button>' +
+          '<button class="btn-ghost" id="rev-stats">' + I.sparkles + '学习记录</button>' +
+        '</div>' +
       '</div>';
+    if (state.composingStudySet) {
+      out += renderStudySetComposer() + '</div>';
+      return out;
+    }
     if (!nL) {
       out += renderRankCard(rank) +
-        '<div class="list-empty">还没有学习集。先去阅读点词，或在「词汇」里手动添加单词。</div></div>';
+        '<div class="list-empty">还没有可复习的词。先去阅读点词，或直接新建一个学习集。</div></div>';
       return out;
     }
 
@@ -3463,7 +3519,7 @@
     saveSyncMeta();
     lemmaCache = {};
     state.currentArticleId = null; state.currentBook = null; state.composing = false; state.selected = null; state.lookup = null;
-    state.bookOpen = null; state.composingBook = false; state.addWordsTo = null; state.showSettings = false; state.showRankGuide = false; state.rankUp = null;
+    state.bookOpen = null; state.composingBook = false; state.composingStudySet = false; state.addWordsTo = null; state.showSettings = false; state.showRankGuide = false; state.rankUp = null;
     saveArticles(); saveVocab(); saveKnown(); saveProgress(); saveCustomBooks(); saveStats(); render();
     syncApplying = false;
     if (!opts.silent) alert('导入成功：' + summary + '。');
@@ -4162,6 +4218,21 @@
     if ($('start-today')) $('start-today').addEventListener('click', function () {
       startStudyMode('learn');
     });
+    if ($('study-set-new')) $('study-set-new').addEventListener('click', function () {
+      state.composingStudySet = true;
+      state.newStudySetName = '';
+      state.newStudySetWords = '';
+      render();
+    });
+    if ($('study-set-cancel')) $('study-set-cancel').addEventListener('click', function () { state.composingStudySet = false; render(); });
+    if ($('study-set-cancel-2')) $('study-set-cancel-2').addEventListener('click', function () { state.composingStudySet = false; render(); });
+    if ($('study-set-name')) $('study-set-name').addEventListener('input', function (e) { state.newStudySetName = e.target.value; });
+    if ($('study-set-words')) $('study-set-words').addEventListener('input', function (e) {
+      state.newStudySetWords = e.target.value;
+      var btn = $('study-set-create');
+      if (btn) btn.disabled = !parseWordList(e.target.value).length;
+    });
+    if ($('study-set-create')) $('study-set-create').addEventListener('click', createStudySetFromReview);
     if ($('rev-stats')) $('rev-stats').addEventListener('click', function () { state.reviewView = 'stats'; render(); });
     if ($('stats-back')) $('stats-back').addEventListener('click', function () { state.reviewView = 'home'; render(); });
     if ($('goal-dec')) $('goal-dec').addEventListener('click', function () { if (!state.stats) state.stats = defaultStats(); state.stats.goal = Math.max(5, (state.stats.goal || 20) - 5); saveStats(); render(); });

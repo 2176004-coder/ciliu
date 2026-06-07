@@ -552,6 +552,11 @@
   .choice.wrong{ background:rgba(180,70,70,0.16); border-color:#B44646; color:#8B3A3A; }
   .choice.dim{ opacity:0.5; }
   .study-kicker{ color:var(--accentDeep); font-size:12px; margin-bottom:4px; }
+  .studyset-form{ background:var(--bgSoft); border:1px solid var(--border); border-radius:16px; padding:22px; }
+  .studyset-form-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:14px; }
+  .studyset-form h3{ margin:0; color:var(--ink); font-size:24px; font-weight:600; }
+  .studyset-form .input-title{ width:100%; font-size:20px; color:var(--ink); margin-bottom:12px; }
+  .studyset-form .compose{ min-height:220px; margin:0; }
   .write-sense{ max-width:30em; margin:0 auto 12px; color:var(--ink); font-size:18px; line-height:1.6; }
   .write-box{ max-width:30em; margin:18px auto 0; }
   .write-input{ width:100%; height:58px; border-radius:10px; border:1px solid var(--borderStrong); background:var(--bg);
@@ -698,7 +703,7 @@
   .wb-acc{ font-size:11px; color:var(--inkMuted); }
   .wb-day{ font-size:12px; color:var(--inkSoft); }
 	  @media (max-width:720px){ .review-dashboard{ grid-template-columns:1fr; } }
-	  @media (max-width:520px){ .stat-grid{ grid-template-columns:repeat(2,1fr); } .srs-hero{ gap:16px; padding:18px; } .daily-filter{ align-items:stretch; flex-direction:column; gap:6px; } .write-input{ font-size:26px; } .rank-top{ flex-direction:column; gap:6px; } .rank-foot{ align-items:flex-start; flex-direction:column; } .rank-guide-current{ align-items:flex-start; flex-direction:column; gap:4px; } }
+	  @media (max-width:520px){ .stat-grid{ grid-template-columns:repeat(2,1fr); } .srs-hero{ gap:16px; padding:18px; } .daily-filter,.studyset-form-head{ align-items:stretch; flex-direction:column; gap:6px; } .write-input{ font-size:26px; } .rank-top{ flex-direction:column; gap:6px; } .rank-foot{ align-items:flex-start; flex-direction:column; } .rank-guide-current{ align-items:flex-start; flex-direction:column; gap:4px; } }
 
   /* 词书 */
   .book-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
