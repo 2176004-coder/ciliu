@@ -1074,7 +1074,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.2 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.3 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1092,11 +1092,11 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.2 · local</span></div>' +
+      '<span class="ver font-mono">1.8.3 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
-        tabBtn('review', '复习', I.sparkles) +
+        tabBtn('review', '学习集', I.sparkles) +
         '<span style="width:8px"></span>' +
         '<button class="icon-btn" id="btn-settings" title="阅读设置">' + I.settings + '</button>' +
         (TTS_OK ? '<button class="icon-btn" id="btn-autospeak" title="' + (state.autoSpeak ? '点词自动朗读：开' : '点词自动朗读：关') + '" style="' + (state.autoSpeak ? 'color:var(--accent)' : 'opacity:0.55') + '">' + (state.autoSpeak ? I.volume : I.volumeX) + '</button>' : '') +
@@ -1151,7 +1151,7 @@
         '<button class="btn-pill ghost-pill" id="set-sync-push">立即上传</button>' +
         '<button class="btn-pill ghost-pill" id="set-sync-pull">立即拉取</button>' +
         '<button class="btn-pill ghost-pill" id="cloud-disconnect">断开</button>' +
-      '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文，占空间大）', 'syncArticles');
+      '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（仅 Firebase 支持分块，同步码方式不传正文）', 'syncArticles');
   }
   function renderFirebaseSync(m) {
     var signedIn = !!(m.fbConfig && m.fbUid);
@@ -1162,7 +1162,7 @@
           '<button class="btn-pill ghost-pill" id="set-sync-push">立即上传</button>' +
           '<button class="btn-pill ghost-pill" id="set-sync-pull">立即拉取</button>' +
           '<button class="btn-pill ghost-pill" id="fb-signout">退出登录</button>' +
-        '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文，占空间大）', 'syncArticles');
+        '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文，自动分块上传，不超限）', 'syncArticles');
     }
     return '<p class="cloud-hint font-cjk">在 Firebase 控制台建项目 → 开 Firestore + 谷歌登录 → 复制 firebaseConfig 粘进下框，保存后用谷歌登录。具体步骤见同步指南。</p>' +
       '<textarea class="cloud-input font-mono" id="fb-config" rows="6" placeholder="粘贴 firebaseConfig = { apiKey: \'...\', authDomain: \'...\', projectId: \'...\', appId: \'...\' }">' + (m.fbConfig ? esc(JSON.stringify(m.fbConfig, null, 0)) : '') + '</textarea>' +
@@ -1196,7 +1196,7 @@
         toggleRow('翻页时未标记词记为已掌握', 'autoKnown') +
         toggleRow('显示生词高亮', 'highlight') +
         toggleRow('翻页动画', 'anim') +
-        toggleRow('复习答题音效', 'sound') +
+        toggleRow('学习集音效', 'sound') +
         toggleRow('瓦罗兰特段位', 'valorantRank') +
         toggleRow('点词自动朗读', 'autoSpeak', true) +
         '<div class="set-row"><span class="set-label font-cjk">本地备份</span><div class="set-actions">' +
@@ -1768,7 +1768,7 @@
       var act = inKnown
         ? '<button class="bk-add" data-unknow="' + esc(w) + '" title="移回未掌握">移回</button>'
         : '<button class="bk-add" data-grad="' + esc(w) + '" title="标为已掌握">✓ 掌握</button>';
-      var addV = (!inKnown && !savedFormsSet().has(w)) ? '<button class="bk-add" data-addbook="' + esc(w) + '" title="加入生词以便复习">+生词</button>' : '';
+      var addV = (!inKnown && !savedFormsSet().has(w)) ? '<button class="bk-add" data-addbook="' + esc(w) + '" title="加入学习集">+生词</button>' : '';
       body += '<div class="vrow">' +
         '<div class="vrow-main"><div class="vrow-head">' +
           '<span class="w font-display">' + esc(rec.w || w) + '</span>' +
@@ -1805,7 +1805,7 @@
     return out + renderBooks() + '</div>';                               // 书架
   }
 
-  // 「我的词书」= 个人生词库（保留全部功能：加词/批量/复习/例句）
+  // 「我的词书」= 个人生词库（保留全部功能：加词/批量/学习/例句）
   function renderMyBook() {
     var isLearning = state.vocabTab !== 'known';
     var nL = state.vocabulary.length, nK = state.known.length;
@@ -1851,7 +1851,7 @@
     if (nSel > 0) {
       out += '<div class="bulk-bar"><span>已选 ' + nSel + ' 个</span><span class="sp"></span>';
       if (isLearning) {
-        if (selLearn.length) out += '<button class="bulk-btn" data-bulk="review">复习选中</button>';
+        if (selLearn.length) out += '<button class="bulk-btn" data-bulk="review">学习选中</button>';
         out += '<button class="bulk-btn" data-bulk="graduate">标为已掌握</button>' +
                '<button class="bulk-btn ghost" data-bulk="delete">删除</button>';
       } else {
@@ -1915,13 +1915,13 @@
     return out;
   }
 
-  // ---------- 复习标签 ----------
+  // ---------- 学习集模式 ----------
   var MODES = [
-    { id: 'flash', title: '单词卡', desc: '翻面看释义，认识/不认识，认识的移入已掌握' },
-    { id: 'mc', title: '选择题', desc: '看词和例句，从词库里选出正确释义' },
-    { id: 'cloze', title: '例句挖空', desc: '把原文例句里的词挖空，选词填回' },
-    { id: 'match', title: '配对游戏', desc: '单词和释义连连看，凑成对子' },
-    { id: 'test', title: '综合测验', desc: '混合题型 10 题，做完给分' }
+    { id: 'flash', title: '单词卡', desc: '像卡片一样翻面自测，适合快速过一遍' },
+    { id: 'learn', title: '学习', desc: '选择、例句、书写混合推进，优先安排到期词' },
+    { id: 'write', title: '书写', desc: '看释义和例句拼出单词，专治眼熟手生' },
+    { id: 'test', title: '测试', desc: '固定 10 题混合测验，做完给出正确率' },
+    { id: 'match', title: '配对', desc: '单词和释义连连看，轻量热身或收尾' }
   ];
 
   var RANKS = [
@@ -2197,8 +2197,36 @@
     return ok ? id : 'all';
   }
 
-  function renderReviewBookSelect(opts, selectedId) {
-    var html = '<div class="daily-filter"><label class="font-cjk" for="review-book-select">今日词书</label>' +
+  function studySetEntries(id) {
+    var set = reviewBookWordSet(id || 'all');
+    return state.vocabulary.filter(function (v) {
+      return !set || set.has(String(v.lemma).toLowerCase());
+    });
+  }
+
+  function studySetIds(id) {
+    return studySetEntries(id).map(function (e) { return e.id; });
+  }
+
+  function studySetMasteredCount(id) {
+    var set = reviewBookWordSet(id || 'all');
+    if (!set) return state.known.length;
+    var n = 0;
+    state.known.forEach(function (w) { if (set.has(String(w).toLowerCase())) n++; });
+    return n;
+  }
+
+  function currentStudySetOption(opts, selectedId) {
+    opts = opts || reviewBookOptions();
+    selectedId = selectedId || currentReviewBookId();
+    for (var i = 0; i < opts.length; i++) {
+      if (opts[i].id === selectedId) return opts[i];
+    }
+    return opts[0] || { id: 'all', name: '全部生词', count: 0 };
+  }
+
+  function renderStudySetSelect(opts, selectedId) {
+    var html = '<div class="daily-filter"><label class="font-cjk" for="review-book-select">学习集</label>' +
       '<select class="sort" id="review-book-select">';
     opts.forEach(function (o) {
       html += '<option value="' + esc(o.id) + '"' + (o.id === selectedId ? ' selected' : '') + '>' +
@@ -2221,54 +2249,47 @@
     var rank = masteryRank();
     var out = '<div class="wrap" style="padding-top:32px;padding-bottom:32px">' +
       '<div class="row between" style="margin-bottom:18px">' +
-        '<h2 class="page-title font-display" style="margin:0">复习</h2>' +
-        '<button class="btn-ghost" id="rev-stats">' + I.sparkles + '学习统计</button>' +
+        '<h2 class="page-title font-display" style="margin:0">学习集</h2>' +
+        '<button class="btn-ghost" id="rev-stats">' + I.sparkles + '学习记录</button>' +
       '</div>';
     if (!nL) {
       out += renderRankCard(rank) +
-        '<div class="list-empty">还没有生词。先去阅读、点词攒一些生词，或在「词汇」里手动添加。</div></div>';
+        '<div class="list-empty">还没有学习集。先去阅读点词，或在「词汇」里手动添加单词。</div></div>';
       return out;
     }
 
     var reviewBookOpts = reviewBookOptions();
-    var reviewBookId = (state.stats && state.stats.reviewBook) || 'all';
-    var selectedBook = reviewBookOpts[0];
-    for (var oi = 0; oi < reviewBookOpts.length; oi++) {
-      if (reviewBookOpts[oi].id === reviewBookId) selectedBook = reviewBookOpts[oi];
-    }
-    reviewBookId = selectedBook ? selectedBook.id : 'all';
+    var reviewBookId = currentReviewBookId();
+    var selectedBook = currentStudySetOption(reviewBookOpts, reviewBookId);
+    reviewBookId = selectedBook.id || 'all';
+    var setIds = studySetIds(reviewBookId);
     var due = dueIds(reviewBookId).length;
-    var allDue = dueIds('all').length;
+    var masteredInSet = studySetMasteredCount(reviewBookId);
     var bookLabel = selectedBook ? selectedBook.name : '全部生词';
     var goal = (state.stats && state.stats.goal) || 20;
     var done = todayCount();
     var ring = Math.max(0, Math.min(100, Math.round(done / Math.max(1, goal) * 100)));
     var streak = (state.stats && state.stats.streak) || 0;
+    var startCount = due || setIds.length;
+    var cue = due > 0 ? ('今天到期 ' + due + ' 词，优先按记忆进度推进。') : '今天没有到期词，可以自由练习这一组。';
 
     out += '<div class="review-dashboard">' +
       '<div class="srs-hero">' +
         '<div class="hero-ring" style="--p:' + ring + '%"><div class="hr-inner"><span class="hr-num font-display">' + done + '</span><span class="hr-goal font-mono">/ ' + goal + '</span></div></div>' +
         '<div class="hero-meta">' +
-          '<div class="streak-line font-display">🔥 连续打卡 ' + streak + ' 天</div>' +
-          '<div class="font-cjk" style="color:var(--inkMuted);font-size:13px;margin-top:2px">今日已复习 ' + done + ' 词　·　目标 ' + goal + '</div>' +
-          renderReviewBookSelect(reviewBookOpts, reviewBookId) +
-          '<div class="font-cjk" style="color:var(--inkMuted);font-size:12px;margin-top:8px">每日复习按「' + esc(bookLabel) + '」筛选，并优先安排常见度高的词。</div>' +
-          (due > 0
-            ? '<button class="btn-pill" id="start-today" style="margin-top:12px">开始今日复习　·　' + due + ' 词</button>'
-            : '<div class="font-cjk" style="margin-top:12px;color:var(--accent);font-size:14px">' + (allDue > 0 ? '这本词书今天没有待复习的词' : '🎉 今日该复习的词都做完了') + '</div>') +
+          '<div class="study-kicker font-cjk">当前学习集</div>' +
+          '<div class="streak-line font-display">' + esc(bookLabel) + '</div>' +
+          '<div class="font-cjk" style="color:var(--inkMuted);font-size:13px;margin-top:2px">学习中 ' + setIds.length + ' 词　·　已掌握 ' + masteredInSet + ' 词　·　连续 ' + streak + ' 天</div>' +
+          renderStudySetSelect(reviewBookOpts, reviewBookId) +
+          '<div class="font-cjk" style="color:var(--inkMuted);font-size:12px;margin-top:8px">' + esc(cue) + '</div>' +
+          '<button class="btn-pill" id="start-today" style="margin-top:12px">继续学习　·　' + startCount + ' 词</button>' +
         '</div></div>' +
       renderRankCard(rank) +
       '</div>';
 
-    out += '<h3 class="font-display" style="font-size:15px;margin:28px 0 12px;color:var(--inkSoft)">练习模式</h3>' +
-      '<p class="font-cjk" style="color:var(--inkMuted);margin:0 0 14px;font-size:13px">随时加练，用你读到的例句出题；做对做错也会计入记忆进度。</p>';
-    var hids = hardIds();
+    out += '<h3 class="font-display" style="font-size:15px;margin:28px 0 12px;color:var(--inkSoft)">五个模式</h3>' +
+      '<p class="font-cjk" style="color:var(--inkMuted);margin:0 0 14px;font-size:13px">每个模式都只使用当前学习集；做对做错会继续写入记忆进度。</p>';
     out += '<div class="mode-grid">';
-    if (hids.length) {
-      out += '<button class="mode-card hard" data-mode="hard">' +
-        '<span class="mc-title font-display">难词优先</span>' +
-        '<span class="mc-desc font-cjk">优先复习答错或标记不认识的 ' + hids.length + ' 个词</span></button>';
-    }
     MODES.forEach(function (m) {
       out += '<button class="mode-card" data-mode="' + m.id + '">' +
         '<span class="mc-title font-display">' + m.title + '</span>' +
@@ -2297,12 +2318,12 @@
     // 数字卡
     out += '<div class="stat-grid">' +
       statTile('🔥 ' + (s.streak || 0), '连续天数') +
-      statTile(done + ' / ' + goal, '今日复习') +
-      statTile('' + due, '待复习') +
+      statTile(done + ' / ' + goal, '今日学习') +
+      statTile('' + due, '待学习') +
       statTile('' + nK, '已掌握') +
       statTile('' + nL, '学习中') +
       statTile(rank.code, rank.game ? '瓦罗兰特段位' : '水平 · ' + rank.name) +
-      statTile('' + totalReviews(), '累计复习') +
+      statTile('' + totalReviews(), '累计练习') +
       '</div>';
 
     // 每日目标
@@ -2374,7 +2395,7 @@
     return out;
   }
 
-  // ---------- 复习卡片（翻卡 / 选择题 / 挖空） ----------
+  // ---------- 学习卡片（翻卡 / 选择题 / 挖空 / 书写） ----------
   function reviewCard() {
     var r = state.review, e = curEntry();
     var inf = enrich(e.lemma, e);
@@ -2405,7 +2426,25 @@
             '<button class="rate-btn good" id="flash-know">认识</button>' +
           '</div>';
       }
-    } else { // 题目模式：mc / cloze
+    } else if (r.questionKind === 'write') {
+      var clue = ctx && ctx.sentence ? ctx.sentence.replace(new RegExp(escapeReg(ctx.surface || e.lemma), 'i'), '＿＿＿＿') : '';
+      var typed = r.typed || '';
+      var okWrite = r.writeChecked && writeAnswerOk(r, e);
+      out += '<p class="rev-prompt font-cjk">根据释义写出这个单词</p>' +
+        '<p class="write-sense font-cjk">' + esc(shortSense(inf.translation) || '（无释义）') + '</p>' +
+        (clue ? '<p class="rev-ctx font-reading">' + esc(clue) + '</p>' : '') +
+        '<div class="write-box">' +
+          '<input class="write-input font-display" id="write-answer" value="' + esc(typed) + '" placeholder="type the word" autocomplete="off" autocapitalize="none" spellcheck="false"' + (r.writeChecked ? ' disabled' : '') + '>' +
+        '</div>';
+      if (r.writeChecked) {
+        out += '<div class="write-result ' + (okWrite ? 'ok' : 'bad') + ' font-cjk">' +
+          (okWrite ? '拼写正确' : '正确答案：<b class="font-display">' + esc(writeAnswerLabel(e)) + '</b>') +
+          '</div>' +
+          '<div class="rev-actions"><button class="btn-pill" id="write-next" style="padding:11px 26px">继续</button></div>';
+      } else {
+        out += '<div class="rev-actions"><button class="btn-pill" id="write-check" style="padding:11px 26px">检查</button></div>';
+      }
+    } else { // 题目模式：选择 / 例句挖空
       var ch = r.choices;
       if (ch.kind === 'cloze') {
         out += '<p class="rev-prompt font-cjk">选出空格处的单词</p>' +
@@ -2472,7 +2511,7 @@
       : '答对 ' + r.stats.correct + ' / ' + r.stats.answered + ' 题';
     return '<div class="wrap" style="padding-top:48px;padding-bottom:32px">' +
       '<div class="empty"><div class="circle">' + I.check + '</div>' +
-      '<h3 class="font-display">本轮完成</h3>' +
+      '<h3 class="font-display">学习完成</h3>' +
       '<p class="font-cjk">' + summary + '</p>' +
       '<button class="btn-pill" id="exit-review">返回</button></div></div>';
   }
@@ -2759,7 +2798,7 @@
 
   function bulkAction(type) {
     if (type === 'clear') { clearSel(); render(); return; }
-    if (type === 'review') { reviewSelected('flash'); return; }
+    if (type === 'review') { reviewSelected('learn'); return; }
     var keys = Object.keys(state.vocabSel).filter(function (k) { return state.vocabSel[k]; });
     var beforeRankCount = state.known.length;
     keys.forEach(function (k) {
@@ -3013,7 +3052,7 @@
     render();
   }
 
-  // ---------- 复习（Quizlet 式翻卡） ----------
+  // ---------- 学习集练习 ----------
   function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 
   function shortSense(t) {
@@ -3028,7 +3067,7 @@
   function todayStr() { return dayStr(Date.now()); }
   function defaultStats() { return { streak: 0, lastDay: '', goal: 20, reviewBook: 'all', days: {} }; }
   function endOfTodayTs() { var d = new Date(); d.setHours(23, 59, 59, 999); return d.getTime(); }
-  // 记一次复习：今日计数 + 连续天数 streak
+  // 记一次学习：今日计数 + 连续天数 streak
   function recordStudy(ok) {
     if (!state.stats) state.stats = defaultStats();
     var t = todayStr();
@@ -3051,7 +3090,7 @@
     if (fa !== fb) return fa - fb;
     return (b.misses || 0) - (a.misses || 0) || (srsOf(a).due || 0) - (srsOf(b).due || 0);
   }
-  // 今天（含之前）到期的生词；每日复习会把常见词排在前面
+  // 今天（含之前）到期的生词；每日学习会把常见词排在前面
   function dueVocab(bookId) {
     var lim = endOfTodayTs();
     var set = reviewBookWordSet(bookId || 'all');
@@ -3061,7 +3100,7 @@
     }).sort(compareDailyPriority);
   }
   function dueIds(bookId) { return dueVocab(bookId).map(function (e) { return e.id; }); }
-  // 判分并排下次复习；答对升级、到顶毕业；答错回 0 稍后再练。返回是否毕业
+  // 判分并排下次学习；答对升级、到顶毕业；答错回 0 稍后再练。返回是否毕业
   function srsGrade(entryId, ok) {
     var idx = state.vocabulary.findIndex(function (v) { return v.id === entryId; });
     if (idx < 0) { recordStudy(ok); return false; }
@@ -3088,12 +3127,12 @@
     return false;
   }
 
-  // ids：要复习的生词 id 列表；mode：'flash'(翻卡自评，在词汇页) | 'mc'(选择题，在复习页)
+  // ids：要学习的生词 id 列表；mode：flash / learn / write / test / match
   function startReview(ids, mode, opts) {
     if (!ids || !ids.length) return;
     var queue = (opts && opts.keepOrder) ? ids.slice() : shuffle(ids.slice());
     state.review = { mode: mode || 'flash', queue: queue, idx: 0, total: ids.length, phase: 'front', picked: null, choices: null,
-      stats: { graduated: 0, stillLearning: 0, correct: 0, answered: 0 } };
+      questionKind: null, typed: '', writeChecked: false, stats: { graduated: 0, stillLearning: 0, correct: 0, answered: 0 } };
     clearSel();
     state.tab = 'review';
     prepareCard();
@@ -3121,6 +3160,22 @@
     var ids = Object.keys(state.vocabSel).filter(function (k) { return state.vocabSel[k] && k.indexOf('known:') !== 0; });
     startReview(ids, mode);
   }
+  function startStudyMode(mode) {
+    var bookId = currentReviewBookId();
+    if (mode === 'match') { startMatch(bookId); return; }
+    var ids = studySetIds(bookId);
+    if (!ids.length) { alert('这个学习集还没有可练的词。'); return; }
+    if (mode === 'learn') {
+      var due = dueIds(bookId);
+      startReview(due.length ? due : ids, 'learn', { keepOrder: due.length > 0 });
+      return;
+    }
+    if (mode === 'test') {
+      startReview(shuffle(ids).slice(0, Math.min(10, ids.length)), 'test');
+      return;
+    }
+    startReview(ids, mode);
+  }
   function curEntry() {
     var r = state.review; if (!r) return null;
     var id = r.queue[r.idx];
@@ -3134,15 +3189,32 @@
     if (r.idx >= r.queue.length) return;
     var e = curEntry();
     r.picked = null;
+    r.typed = '';
+    r.writeChecked = false;
+    r.questionKind = null;
     if (r.mode === 'flash') { r.phase = 'front'; r.choices = null; }
     else {
-      var qt = (r.mode === 'mc') ? 'mc' : (r.mode === 'cloze') ? 'cloze' : (Math.random() < 0.5 ? 'mc' : 'cloze');
+      var qt;
+      if (r.mode === 'mc') qt = 'mc';
+      else if (r.mode === 'cloze') qt = 'cloze';
+      else if (r.mode === 'write') qt = 'write';
+      else {
+        var mix = ['mc', 'cloze', 'write'];
+        qt = mix[Math.floor(Math.random() * mix.length)];
+      }
       var ch = (qt === 'cloze') ? buildCloze(e) : null;
-      if (qt === 'cloze' && !ch) qt = 'mc';
-      r.choices = (qt === 'cloze') ? ch : buildMC(e);
-      r.phase = 'q';
+      if (qt === 'cloze' && !ch) qt = (r.mode === 'cloze') ? 'mc' : 'write';
+      if (qt === 'write') {
+        r.choices = null;
+        r.questionKind = 'write';
+        r.phase = 'write';
+      } else {
+        r.choices = (qt === 'cloze') ? ch : buildMC(e);
+        r.questionKind = r.choices.kind;
+        r.phase = 'q';
+      }
     }
-    if (state.autoSpeak && (!r.choices || r.choices.kind !== 'cloze')) speak(e.lemma); // 挖空别读出答案
+    if (state.autoSpeak && r.questionKind !== 'cloze' && r.questionKind !== 'write') speak(e.lemma); // 挖空/书写别读出答案
   }
   // 选择题：选释义
   function buildMC(e) {
@@ -3226,7 +3298,7 @@
     r.idx++; prepareCard(); render();
   }
   function pickChoice(i) {
-    var r = state.review; if (!r || r.picked !== null) return;
+    var r = state.review; if (!r || !r.choices || r.picked !== null) return;
     r.picked = i;
     if (i === r.choices.correctIdx) sfxCorrect(); else sfxWrong();
     render();
@@ -3240,11 +3312,53 @@
     else recordStudy(ok);
     r.idx++; prepareCard(); render();
   }
-  // 综合测验：固定 10 题，混合选择题与挖空
-  function reviewTest() { startReview(shuffle(allIds()).slice(0, Math.min(10, state.vocabulary.length)), 'test'); }
+  function normalizeWrittenAnswer(text) {
+    return String(text || '').trim().toLowerCase().replace(/[’]/g, "'").replace(/[^a-z'\-]/g, '');
+  }
+  function writeAnswerForms(e) {
+    var out = [], seen = {};
+    function add(x) {
+      var raw = String(x || '').trim();
+      var key = normalizeWrittenAnswer(raw);
+      if (key && !seen[key]) { seen[key] = 1; out.push(raw); }
+    }
+    add(e && e.lemma);
+    if (e && e.contexts && e.contexts[0]) add(e.contexts[0].surface);
+    if (e && Array.isArray(e.forms)) e.forms.forEach(add);
+    return out;
+  }
+  function writeAnswerLabel(e) {
+    var forms = writeAnswerForms(e);
+    return forms.slice(0, 2).join(' / ') || (e && e.lemma) || '';
+  }
+  function writeAnswerOk(r, e) {
+    var ans = normalizeWrittenAnswer(r && r.typed);
+    return writeAnswerForms(e).some(function (f) { return ans === normalizeWrittenAnswer(f); });
+  }
+  function checkWriteAnswer() {
+    var r = state.review, e = curEntry(); if (!r || !e || r.questionKind !== 'write') return;
+    var input = document.getElementById('write-answer');
+    if (input) r.typed = input.value;
+    if (!String(r.typed || '').trim()) return;
+    r.writeChecked = true;
+    if (writeAnswerOk(r, e)) sfxCorrect(); else sfxWrong();
+    render();
+  }
+  function writeContinue() {
+    var r = state.review, e = curEntry(); if (!r || !e || r.questionKind !== 'write') return;
+    if (!r.writeChecked) { checkWriteAnswer(); return; }
+    var ok = writeAnswerOk(r, e);
+    r.stats.answered++; if (ok) r.stats.correct++;
+    if (srsGrade(e.id, ok)) r.stats.graduated++;
+    r.idx++; prepareCard(); render();
+  }
+  // 综合测验：固定 10 题，混合选择题、挖空与书写
+  function reviewTest() { startStudyMode('test'); }
   // 配对游戏
-  function startMatch() {
-    var entries = shuffle(state.vocabulary.slice()).filter(function (e) { return shortSense(enrich(e.lemma, e).translation); }).slice(0, 6);
+  function startMatch(bookId) {
+    if (bookId && typeof bookId !== 'string') bookId = null;
+    bookId = bookId || (state.review && state.review.bookId) || currentReviewBookId();
+    var entries = shuffle(studySetEntries(bookId).slice()).filter(function (e) { return shortSense(enrich(e.lemma, e).translation); }).slice(0, 6);
     if (entries.length < 2) { alert('有释义的生词太少，至少需要 2 个。'); return; }
     var tiles = [];
     entries.forEach(function (e, pi) {
@@ -3252,7 +3366,7 @@
       tiles.push({ pairId: pi, kind: 'm', text: shortSense(enrich(e.lemma, e).translation), eid: e.id });
     });
     shuffle(tiles);
-    state.review = { mode: 'match', tiles: tiles, pairs: entries.length, firstIdx: null, matched: 0, moves: 0, locked: false, wrong: null };
+    state.review = { mode: 'match', bookId: bookId, tiles: tiles, pairs: entries.length, firstIdx: null, matched: 0, moves: 0, locked: false, wrong: null };
     clearSel(); state.tab = 'review'; render();
   }
   function matchClick(idx) {
@@ -3272,7 +3386,10 @@
   // ---------- 导出/导入 ----------
   function cloudPayload() {
     var p = backupPayload();
-    if (!(state.settings && state.settings.syncArticles)) { delete p.articles; delete p.readProgress; } // 云端默认不传文章正文，避免超 1MB
+    // 文章正文只在 Firebase（分块上传，不受 1MB 限制）且开了「同步文章库」时才上传；
+    // 同步码(jsonbin) 暂不分块，仍只传学习数据，避免超限。
+    var canArticles = !!(state.settings && state.settings.syncArticles) && fbActive();
+    if (!canArticles) { delete p.articles; delete p.readProgress; }
     return p;
   }
   function backupPayload() {
@@ -3510,17 +3627,81 @@
     return p.then(function () { var m = ensureSyncMeta(); m.fbUid = null; m.fbEmail = null; saveSyncMeta(); });
   }
   function fbDocRef() { return window.firebase.firestore().collection('users').doc(ensureSyncMeta().fbUid); }
+  function fbChunksCol() { return fbDocRef().collection('chunks'); }
+  // 把整份 JSON 串切成若干块，每块的 UTF-8 字节数 <= maxBytes（Firestore 单文档上限 1MB，留足余量）。
+  // 不会把一个 Unicode 代理对（emoji 等）切成两半。
+  var FB_CHUNK_BYTES = 800000; // 0.8MB / 块，给字段名等开销留余量
+  function chunkByBytes(s, maxBytes) {
+    var chunks = [], start = 0, bytes = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i), w;
+      if (c < 0x80) w = 1;
+      else if (c < 0x800) w = 2;
+      else if (c >= 0xD800 && c <= 0xDBFF) w = 4; // 高代理：和后面的低代理合成 4 字节
+      else w = 3;
+      if (bytes + w > maxBytes && i > start) { chunks.push(s.slice(start, i)); start = i; bytes = 0; }
+      bytes += w;
+      if (c >= 0xD800 && c <= 0xDBFF) i++; // 跳过低代理，避免在代理对中间切开
+    }
+    if (start < s.length) chunks.push(s.slice(start));
+    return chunks;
+  }
+  // 删除编号 >= keepFrom 的旧分块（上次写得更大、这次变小后要清理掉多余的块）
+  function fbClearChunks(keepFrom) {
+    return fbChunksCol().get().then(function (snap) {
+      var dels = [];
+      snap.forEach(function (doc) {
+        var idx = parseInt(doc.id, 10);
+        if (isNaN(idx) || idx >= keepFrom) dels.push(doc.ref.delete());
+      });
+      return Promise.all(dels);
+    }).catch(function () {});
+  }
   function fbWrite(payload) {
     return ensureFbUser().then(function () {
-      return fbDocRef().set({ blob: JSON.stringify(payload), syncUpdatedAt: payload.syncUpdatedAt || Date.now() });
+      var str = JSON.stringify(payload);
+      var stamp = payload.syncUpdatedAt || Date.now();
+      // 小存档：仍写单文档（兼容旧设备），并清掉历史分块
+      if (chunkByBytes(str, FB_CHUNK_BYTES).length <= 1) {
+        return fbDocRef().set({ blob: str, syncUpdatedAt: stamp, chunkCount: 0, fmt: 2 })
+          .then(function () { return fbClearChunks(0); });
+      }
+      // 大存档（含文章正文）：切块分别写进 chunks 子集合，主文档只存清单
+      var parts = chunkByBytes(str, FB_CHUNK_BYTES);
+      var n = parts.length;
+      var col = fbChunksCol();
+      var chain = Promise.resolve();
+      parts.forEach(function (p, idx) {
+        chain = chain.then(function () { return col.doc(String(idx)).set({ blob: p, i: idx }); });
+      });
+      // 先写完所有块，再把主文档当作“提交点”写入清单，最后清理多余旧块
+      return chain
+        .then(function () { return fbDocRef().set({ blob: '', syncUpdatedAt: stamp, chunkCount: n, fmt: 2 }); })
+        .then(function () { return fbClearChunks(n); });
     });
   }
   function fbRead() {
     return ensureFbUser().then(function () { return fbDocRef().get(); }).then(function (snap) {
       if (!snap.exists) return null;
       var data = snap.data();
-      if (!data || !data.blob) return null;
-      try { return JSON.parse(data.blob); } catch (e) { return null; }
+      if (!data) return null;
+      var n = data.chunkCount || 0;
+      if (!n) { // 旧格式 / 小存档：直接解析主文档的 blob
+        if (!data.blob) return null;
+        try { return JSON.parse(data.blob); } catch (e) { return null; }
+      }
+      var col = fbChunksCol();
+      var gets = [];
+      for (var i = 0; i < n; i++) gets.push(col.doc(String(i)).get());
+      return Promise.all(gets).then(function (snaps) {
+        var parts = [];
+        for (var j = 0; j < snaps.length; j++) {
+          var d = snaps[j].exists ? snaps[j].data() : null;
+          if (!d || typeof d.blob !== 'string') return null; // 缺块说明上传未完成，放弃这次拉取
+          parts[j] = d.blob;
+        }
+        try { return JSON.parse(parts.join('')); } catch (e) { return null; }
+      });
     });
   }
   function fbActive() { var m = ensureSyncMeta(); return !!(m.provider === 'firebase' && m.fbConfig && m.fbUid); }
@@ -3965,18 +4146,13 @@
 
     // ----- 手动添加 -----
     if ($('add-word-btn')) $('add-word-btn').addEventListener('click', function () { addManualWord(state.vocabSearch); });
-    // ----- 单词卡（词汇页，flash 模式） -----
-    // ----- 复习页：模式选择 -----
+    // ----- 学习集：模式选择 -----
     document.querySelectorAll('[data-mode]').forEach(function (b) {
       b.addEventListener('click', function () {
-        var m = b.getAttribute('data-mode');
-        if (m === 'match') startMatch();
-        else if (m === 'test') reviewTest();
-        else if (m === 'hard') startReview(hardIds(), 'hard');
-        else reviewAll(m); // 'mc' | 'cloze'
+        startStudyMode(b.getAttribute('data-mode'));
       });
     });
-    // ----- 复习首页：今日复习 / 统计 / 每日目标 -----
+    // ----- 学习集首页：继续学习 / 统计 / 每日目标 -----
     if ($('review-book-select')) $('review-book-select').addEventListener('change', function (e) {
       if (!state.stats) state.stats = defaultStats();
       state.stats.reviewBook = e.target.value || 'all';
@@ -3984,7 +4160,7 @@
       render();
     });
     if ($('start-today')) $('start-today').addEventListener('click', function () {
-      startReview(dueIds(currentReviewBookId()), 'flash', { keepOrder: true });
+      startStudyMode('learn');
     });
     if ($('rev-stats')) $('rev-stats').addEventListener('click', function () { state.reviewView = 'stats'; render(); });
     if ($('stats-back')) $('stats-back').addEventListener('click', function () { state.reviewView = 'home'; render(); });
@@ -4000,6 +4176,18 @@
       b.addEventListener('click', function () { pickChoice(parseInt(b.getAttribute('data-choice'), 10)); });
     });
     if ($('mc-next')) $('mc-next').addEventListener('click', mcContinue);
+    if ($('write-answer')) {
+      var wa = $('write-answer');
+      wa.addEventListener('input', function (e) { if (state.review) state.review.typed = e.target.value; });
+      wa.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        if (state.review && state.review.writeChecked) writeContinue(); else checkWriteAnswer();
+      });
+      if (state.review && !state.review.writeChecked) setTimeout(function () { try { wa.focus(); } catch (err) {} }, 0);
+    }
+    if ($('write-check')) $('write-check').addEventListener('click', checkWriteAnswer);
+    if ($('write-next')) $('write-next').addEventListener('click', writeContinue);
     // ----- 配对游戏 -----
     document.querySelectorAll('[data-tile]').forEach(function (b) {
       b.addEventListener('click', function () { matchClick(parseInt(b.getAttribute('data-tile'), 10)); });

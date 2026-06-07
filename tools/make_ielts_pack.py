@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,30 +19,15 @@ from pypdf import PdfReader
 
 
 DEFAULT_PDFS = [
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【4】剑桥雅思真题4.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【5】剑桥雅思真题5.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【6】剑桥雅思真题6.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【7】剑桥雅思真题7.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【8】剑桥雅思真题8.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【9】剑桥雅思真题9.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【10】剑桥雅思真题10.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【11】剑桥雅思真题11.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【12】剑桥雅思真题12.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【13】剑桥雅思真题13.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【14】剑桥雅思真题14.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【15】剑桥雅思真题15.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【16】剑桥雅思真题16.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【17】剑桥雅思真题17-副本.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【18】剑桥雅思真题18.pdf",
-    "/Users/jiangyanming/Downloads/01，【真题】4-19/【19】剑桥雅思真题19.pdf",
-    "/Users/jiangyanming/Downloads/剑20-Test1.pdf",
-    "/Users/jiangyanming/Downloads/剑20-Test2.pdf",
-    "/Users/jiangyanming/Downloads/剑20Test3.pdf",
-    "/Users/jiangyanming/Downloads/剑20-Test4.pdf",
+    f"/Users/jiangyanming/Desktop/雅思阅读/题4-20/题4-20/剑{i}真题.pdf"
+    for i in range(4, 21)
 ]
 
 
-PASSAGE_RE = re.compile(r"\bR\s*E\s*A\s*D\s*I\s*N\s*G\s+PASSAGE\s+([123I])\b", re.I)
+PASSAGE_RE = re.compile(
+    r"\bR\s*E\s*A\s*D\s*(?:I\s*)?N\s*G\s+P\s*A\s*S\s*S\s*A\s*G\s*E\s+([123I])\b",
+    re.I,
+)
 QUESTION_RE = re.compile(
     r"\bQuestions?\s+\d+(?:\s*[–—-]\s*\d+)?\b|\bWrite your answers?\b",
     re.I,
@@ -52,7 +39,11 @@ def book_number(path: Path) -> int | None:
     m = re.search(r"剑\s*20|剑20|IELTS\s*20|Test[1-4]", name, re.I)
     if m and "20" in m.group(0):
         return 20
-    m = re.search(r"【\s*(\d{1,2})\s*】|剑桥雅思真题\s*(\d{1,2})|IELTS\s*(\d{1,2})", name, re.I)
+    m = re.search(
+        r"【\s*(\d{1,2})\s*】|剑\s*(\d{1,2})\s*真题|剑桥雅思真题\s*(\d{1,2})|IELTS\s*(\d{1,2})",
+        name,
+        re.I,
+    )
     if not m:
         return None
     return int(next(g for g in m.groups() if g))
@@ -64,14 +55,71 @@ def test_number_from_filename(path: Path) -> int | None:
 
 
 def page_texts(path: Path) -> list[str]:
-    reader = PdfReader(str(path))
-    out = []
-    for page in reader.pages:
-        try:
-            out.append(page.extract_text() or "")
-        except Exception:
-            out.append("")
-    return out
+    try:
+        texts = page_texts_pdfjs(path)
+        if sum(len(t) for t in texts) > 0:
+            return texts
+    except Exception as exc:
+        print(f"pdfjs_failed={path.name}:{exc}", file=sys.stderr)
+
+    try:
+        reader = PdfReader(str(path))
+        out = []
+        for page in reader.pages:
+            try:
+                out.append(page.extract_text() or "")
+            except Exception:
+                out.append("")
+        return out
+    except Exception as exc:
+        print(f"pypdf_failed={path.name}:{exc}", file=sys.stderr)
+        return []
+
+
+def page_texts_pdfjs(path: Path) -> list[str]:
+    runtime_root = Path("/Users/jiangyanming/.cache/codex-runtimes/codex-primary-runtime/dependencies")
+    node = runtime_root / "node/bin/node"
+    if not node.exists():
+        found = shutil.which("node")
+        if not found:
+            raise RuntimeError("node not found")
+        node = Path(found)
+    pdfjs_root = runtime_root / "node/node_modules/pdfjs-dist"
+    if not pdfjs_root.exists():
+        raise RuntimeError("pdfjs-dist not found")
+
+    script = r"""
+import { pathToFileURL } from 'url';
+globalThis.console.warn = () => {};
+const pdfPath = process.argv[2];
+const pdfjsRoot = process.argv[3].replace(/\/$/, '');
+const pdfjsLib = await import(pathToFileURL(pdfjsRoot + '/legacy/build/pdf.mjs').href);
+const doc = await pdfjsLib.getDocument({
+  url: pdfPath,
+  disableWorker: true,
+  cMapUrl: pdfjsRoot + '/cmaps/',
+  cMapPacked: true,
+  standardFontDataUrl: pdfjsRoot + '/standard_fonts/',
+  verbosity: pdfjsLib.VerbosityLevel.ERRORS
+}).promise;
+const pages = [];
+for (let i = 1; i <= doc.numPages; i++) {
+  const page = await doc.getPage(i);
+  const tc = await page.getTextContent();
+  pages.push(tc.items.map(item => item.str || '').join(' '));
+}
+process.stdout.write(JSON.stringify(pages));
+"""
+    proc = subprocess.run(
+        [str(node), "--input-type=module", "-", str(path), str(pdfjs_root)],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout).strip()[:500])
+    return json.loads(proc.stdout or "[]")
 
 
 def normalize_text(text: str) -> str:
@@ -102,7 +150,7 @@ def clean_page_for_passage(text: str, passage_no: int, is_start: bool) -> str:
             text = text[m.end() :]
     text = re.sub(r"(?i)\bTest\s+[1-4]\b", "\n", text)
     text = re.sub(r"(?i)\bReading\b", "\n", text)
-    text = re.sub(r"(?i)\bREADING\s+PASSAGE\s+[123]\b", "\n", text)
+    text = PASSAGE_RE.sub("\n", text)
     text = re.sub(
         r"(?is)You\s+should\s+spend\s+about\s+20\s+minutes\s+on\s+Q?\s*uestions?.{0,260}?(?:below|following pages?)\.?",
         "\n",
@@ -213,6 +261,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("pdfs", nargs="*", type=Path, help="PDF files to include")
     parser.add_argument("--out-dir", type=Path, default=Path("private"))
+    parser.add_argument("--merge-pack", action="append", type=Path, default=[], help="Existing local pack JSON to merge")
     args = parser.parse_args()
 
     pdfs = args.pdfs or [Path(p) for p in DEFAULT_PDFS]
@@ -233,7 +282,31 @@ def main() -> int:
             all_articles.append(article)
         reports.append(report)
 
-    all_articles.sort(key=lambda a: (a["book"], a["createdAt"], a["title"]))
+    for merge_pack in args.merge_pack:
+        if not merge_pack.exists():
+            reports.append({"file": str(merge_pack), "status": "merge_pack_missing"})
+            continue
+        try:
+            existing_pack = json.loads(merge_pack.read_text(encoding="utf-8"))
+            merged = 0
+            for article in existing_pack.get("articles", []):
+                article_id = article.get("id")
+                if not article_id or article_id in seen_ids:
+                    continue
+                seen_ids.add(article_id)
+                all_articles.append(article)
+                merged += 1
+            reports.append({"file": str(merge_pack), "status": "merged", "articles": merged})
+        except Exception as exc:
+            reports.append({"file": str(merge_pack), "status": "merge_failed", "error": str(exc)})
+
+    all_articles.sort(
+        key=lambda a: (
+            book_number(Path(a.get("source", ""))) or 0,
+            a["createdAt"],
+            a["title"],
+        )
+    )
     pack = {
         "type": "lexis_article_pack",
         "title": "剑桥雅思阅读合集（本地私用）",

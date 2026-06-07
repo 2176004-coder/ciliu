@@ -381,7 +381,7 @@
   .ghost-pill{ background:transparent; color:var(--inkSoft); border:1px solid var(--borderStrong); white-space:nowrap; }
   .ghost-pill:disabled{ opacity:.45; cursor:not-allowed; }
 
-  /* 复习启动栏 */
+  /* 学习启动栏 */
   .rev-launch{ display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
   .rl-label{ font-size:13px; color:var(--inkMuted); margin-right:2px; }
   .rl-btn{ padding:7px 16px; border-radius:999px; font-family:'Fraunces',serif; font-size:14px; font-weight:500;
@@ -515,7 +515,7 @@
   .pop-spk{ padding:6px; border-radius:8px; color:var(--accentDeep); flex-shrink:0; }
   .pop-spk:hover{ background:rgba(199,123,58,0.12); }
 
-  /* 复习 */
+  /* 学习集 */
   .rev-stats{ display:flex; gap:14px; margin-bottom:28px; }
   .rev-stat{ flex:1; background:var(--bgSoft); border:1px solid var(--border); border-radius:12px; padding:16px 18px; display:flex; flex-direction:column; gap:4px; }
   .rev-stat .n{ font-family:'Fraunces',serif; font-size:30px; font-weight:600; color:var(--ink); }
@@ -551,8 +551,18 @@
   .choice.correct{ background:rgba(86,150,80,0.2); border-color:#5A9650; color:#2F6A2A; }
   .choice.wrong{ background:rgba(180,70,70,0.16); border-color:#B44646; color:#8B3A3A; }
   .choice.dim{ opacity:0.5; }
+  .study-kicker{ color:var(--accentDeep); font-size:12px; margin-bottom:4px; }
+  .write-sense{ max-width:30em; margin:0 auto 12px; color:var(--ink); font-size:18px; line-height:1.6; }
+  .write-box{ max-width:30em; margin:18px auto 0; }
+  .write-input{ width:100%; height:58px; border-radius:10px; border:1px solid var(--borderStrong); background:var(--bg);
+    color:var(--ink); text-align:center; font-size:30px; font-weight:600; outline:none; transition:border-color .15s, box-shadow .15s; }
+  .write-input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(199,123,58,.14); }
+  .write-input:disabled{ opacity:.82; }
+  .write-result{ width:fit-content; max-width:100%; margin:14px auto 0; padding:9px 14px; border-radius:10px; border:1px solid var(--border); font-size:14px; }
+  .write-result.ok{ background:rgba(86,150,80,0.16); color:#3F7A3A; border-color:rgba(86,150,80,0.35); }
+  .write-result.bad{ background:rgba(180,70,70,0.13); color:#8B3A3A; border-color:rgba(180,70,70,0.28); }
 
-  /* 复习模式菜单 */
+  /* 学习集模式菜单 */
   .mode-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .mode-card{ text-align:left; background:var(--bgSoft); border:1px solid var(--border); border-radius:14px;
     padding:20px; display:flex; flex-direction:column; gap:6px; transition:all .15s; cursor:pointer; }
@@ -572,7 +582,7 @@
   .match-tile.matched{ opacity:0; pointer-events:none; transition:opacity .3s; }
   @media (max-width:520px){ .mode-grid{ grid-template-columns:1fr; } }
 
-  /* 复习动画：翻卡 / 答对放大 / 答错抖动 */
+  /* 学习动画：翻卡 / 答对放大 / 答错抖动 */
   .rev-card.flip-in{ animation:cardFlipIn .42s cubic-bezier(.2,.7,.2,1); transform-origin:center; }
   .choice.correct{ animation:popAnsw .42s ease; }
   .choice.wrong{ animation:shakeAnsw .42s ease; }
@@ -589,7 +599,7 @@
   body.no-anim .choice.correct, body.no-anim .choice.wrong,
   body.no-anim .match-tile.sel, body.no-anim .match-tile.wrong{ animation:none !important; }
 
-	  /* 复习首页：今日打卡卡 */
+	  /* 学习集首页：今日打卡卡 */
 	  .review-dashboard{ display:grid; grid-template-columns:1.35fr .9fr; gap:14px; align-items:stretch; }
 	  .srs-hero{ display:flex; align-items:center; gap:22px; background:var(--bgSoft); border:1px solid var(--border);
 	    border-radius:16px; padding:22px 24px; }
@@ -688,7 +698,7 @@
   .wb-acc{ font-size:11px; color:var(--inkMuted); }
   .wb-day{ font-size:12px; color:var(--inkSoft); }
 	  @media (max-width:720px){ .review-dashboard{ grid-template-columns:1fr; } }
-	  @media (max-width:520px){ .stat-grid{ grid-template-columns:repeat(2,1fr); } .srs-hero{ gap:16px; padding:18px; } .daily-filter{ align-items:stretch; flex-direction:column; gap:6px; } .rank-top{ flex-direction:column; gap:6px; } .rank-foot{ align-items:flex-start; flex-direction:column; } .rank-guide-current{ align-items:flex-start; flex-direction:column; gap:4px; } }
+	  @media (max-width:520px){ .stat-grid{ grid-template-columns:repeat(2,1fr); } .srs-hero{ gap:16px; padding:18px; } .daily-filter{ align-items:stretch; flex-direction:column; gap:6px; } .write-input{ font-size:26px; } .rank-top{ flex-direction:column; gap:6px; } .rank-foot{ align-items:flex-start; flex-direction:column; } .rank-guide-current{ align-items:flex-start; flex-direction:column; gap:4px; } }
 
   /* 词书 */
   .book-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
