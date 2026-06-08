@@ -27,7 +27,7 @@
     min-height:100vh;
     -webkit-tap-highlight-color:transparent;
   }
-  body.reader-fixed{ height:100vh; overflow:hidden; overscroll-behavior:none; }
+  body.reader-fixed{ height:100dvh; overflow:hidden; overscroll-behavior:none; }
 
   .font-display{ font-family:var(--font-display); font-feature-settings:'ss01'; }
   .font-reading{ font-family:var(--font-reading); }
@@ -194,8 +194,8 @@
 
   /* reading */
   body.reader-fixed header{ display:none; }
-  body.reader-fixed main{ height:100vh; overflow:hidden; }
-  .reader-wrap{ height:100vh; max-width:var(--reader-maxw,768px); padding-top:12px; padding-bottom:18px; display:flex; flex-direction:column; overflow:hidden; }
+  body.reader-fixed main{ height:100dvh; overflow:hidden; }
+  .reader-wrap{ height:100dvh; max-width:var(--reader-maxw,768px); padding-top:12px; padding-bottom:18px; display:flex; flex-direction:column; overflow:hidden; }
   .reader-scroll{ max-width:var(--reader-maxw,768px); padding-top:12px; padding-bottom:40px; }
   .reader-top{
     display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
@@ -879,18 +879,44 @@
   }
 
   @media (max-width:520px){
-    .reader-fixed main{ height:100dvh; }
-    .reader-wrap{ height:100dvh; padding-left:14px; padding-right:14px; padding-bottom:calc(14px + env(safe-area-inset-bottom)); }
-    .reader-scroll{ padding-left:16px; padding-right:16px; padding-bottom:calc(40px + env(safe-area-inset-bottom)); }
-    .reader-top{ min-height:32px; }
-    .reader-top .btn-ghost{ font-size:13px; padding-left:4px; padding-right:4px; }
-    .article-title{ font-size:21px; line-height:1.16; }
-    .page-shell{ padding:5px 20px 42px; }
-    .page-shell::after{ left:16px; right:16px; bottom:0; height:38px; }
-    .page-edge{ width:40px; height:48px; opacity:.34; background:rgba(250,244,232,.72); border-color:var(--border); }
-    .page-edge.left{ left:-2px; }
-    .page-edge.right{ right:-2px; }
-    .chap-end{ left:22px; right:22px; bottom:13px; }
+    body.reader-fixed{ height:100svh; height:100dvh; background:var(--bg); }
+    .reader-fixed main{ height:100svh; height:100dvh; }
+    .reader-wrap{
+      height:100svh; height:100dvh; width:100%; max-width:none;
+      padding:calc(34px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+    }
+    .reader-scroll{ padding:calc(30px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom)); }
+    .reader-top{
+      min-height:44px; margin:0 0 12px; gap:10px;
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    }
+    .reader-top .btn-ghost{
+      min-height:38px; padding:0 8px 0 0; border-radius:10px;
+      color:var(--inkSoft); font-size:13px; font-family:var(--font-cjk);
+    }
+    .reader-top .btn-ghost svg{ width:18px; height:18px; }
+    .reader-top .icon-btn{
+      width:38px; height:38px; border-radius:12px;
+      background:rgba(45,36,25,.05); color:var(--inkSoft);
+    }
+    .reader-top .page-mini{
+      min-width:64px; padding:7px 10px; border-radius:999px;
+      background:rgba(45,36,25,.05); color:var(--inkSoft); text-align:center; font-size:12px;
+    }
+    .readbar{ height:5px; margin:0 0 18px; background:rgba(45,36,25,.10); }
+    .readbar > div{ background:#2FA75A; }
+    .article-title{ font-size:23px; line-height:1.14; margin:0 0 18px; letter-spacing:0; }
+    .reading-content{ font-size:var(--reader-fs,18px); line-height:1.72; letter-spacing:0; }
+    .reading-content p{ margin-bottom:1.08em; }
+    .page-shell{ padding:0 12px 38px; }
+    .page-shell::after{ left:0; right:0; bottom:0; height:34px; }
+    .page-edge{
+      width:34px; height:42px; opacity:.18; background:rgba(250,244,232,.76);
+      border-color:var(--border); box-shadow:0 6px 18px rgba(45,36,25,.06);
+    }
+    .page-edge.left{ left:-6px; }
+    .page-edge.right{ right:-6px; }
+    .chap-end{ left:18px; right:18px; bottom:11px; }
     .popover{
       left:18px !important; right:18px !important; top:auto !important; bottom:calc(10px + env(safe-area-inset-bottom)) !important;
       width:auto; max-height:46dvh; border-radius:12px; padding:11px 13px;
