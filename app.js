@@ -1117,7 +1117,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.3 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.4 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1135,7 +1135,7 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.3 · local</span></div>' +
+      '<span class="ver font-mono">1.8.4 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
@@ -1194,7 +1194,7 @@
         '<button class="btn-pill ghost-pill" id="set-sync-push">立即上传</button>' +
         '<button class="btn-pill ghost-pill" id="set-sync-pull">立即拉取</button>' +
         '<button class="btn-pill ghost-pill" id="cloud-disconnect">断开</button>' +
-      '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（仅 Firebase 支持分块，同步码方式不传正文）', 'syncArticles');
+      '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（同步码不传正文；阅读进度会同步）', 'syncArticles');
   }
   function renderFirebaseSync(m) {
     var signedIn = !!(m.fbConfig && m.fbUid);
@@ -1205,7 +1205,7 @@
           '<button class="btn-pill ghost-pill" id="set-sync-push">立即上传</button>' +
           '<button class="btn-pill ghost-pill" id="set-sync-pull">立即拉取</button>' +
           '<button class="btn-pill ghost-pill" id="fb-signout">退出登录</button>' +
-        '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文，自动分块上传，不超限）', 'syncArticles');
+        '</div>' + toggleRow('自动同步', 'syncAuto') + toggleRow('同步文章库（含书的正文；阅读进度始终同步）', 'syncArticles');
     }
     return '<p class="cloud-hint font-cjk">在 Firebase 控制台建项目 → 开 Firestore + 谷歌登录 → 复制 firebaseConfig 粘进下框，保存后用谷歌登录。具体步骤见同步指南。</p>' +
       '<textarea class="cloud-input font-mono" id="fb-config" rows="6" placeholder="粘贴 firebaseConfig = { apiKey: \'...\', authDomain: \'...\', projectId: \'...\', appId: \'...\' }">' + (m.fbConfig ? esc(JSON.stringify(m.fbConfig, null, 0)) : '') + '</textarea>' +
@@ -3479,9 +3479,9 @@
   function cloudPayload() {
     var p = backupPayload();
     // 文章正文只在 Firebase（分块上传，不受 1MB 限制）且开了「同步文章库」时才上传；
-    // 同步码(jsonbin) 暂不分块，仍只传学习数据，避免超限。
+    // 阅读进度很小且按文章 ID 存，始终同步；另一台设备导入同一文章后即可接上。
     var canArticles = !!(state.settings && state.settings.syncArticles) && fbActive();
-    if (!canArticles) { delete p.articles; delete p.readProgress; }
+    if (!canArticles) delete p.articles;
     return p;
   }
   function backupPayload() {
