@@ -345,6 +345,10 @@
     scheduleAutoSync(1600);
   }
   function settingsSig() { var s = state.settings || SETTINGS_DEFAULT; return [s.fontSize, s.lineHeight, s.pageWidth].join('-'); }
+  function isMobileLike() {
+    if ((window.innerWidth || 0) <= 700) return true;
+    return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  }
   function applySettings() {
     var s = state.settings || SETTINGS_DEFAULT;
     var r = document.documentElement;
@@ -354,6 +358,7 @@
     document.body.setAttribute('data-theme', s.theme || 'paper');
     document.body.classList.toggle('no-highlight', !s.highlight);
     document.body.classList.toggle('no-anim', !s.anim);
+    document.body.classList.toggle('mobile-lite', isMobileLike());
   }
   // 改设置：写状态→存→应用→清分页缓存（影响排版的项）→重渲染
   function setSetting(key, val) {
@@ -886,6 +891,10 @@
 
   function scheduleHeightPagination() {
     if (state.tab !== 'reading' || state.composing || !state.currentArticleId || !isPaged()) return;
+    if (isMobileLike()) {
+      if (measureTimer) { clearTimeout(measureTimer); measureTimer = null; }
+      return;
+    }
     var cur = state.articles.find(function (a) { return a.id === state.currentArticleId; });
     if (!cur) return;
     var key = pageCacheKey(cur);
@@ -4212,12 +4221,31 @@
       });
     }
 
-    // 词查询浮窗
-    if ($('add-learning')) $('add-learning').addEventListener('click', markLearning);
-    if ($('mark-known')) $('mark-known').addEventListener('click', markKnown);
-    if ($('demote')) $('demote').addEventListener('click', demoteToLearning);
-    if ($('trans-toggle')) $('trans-toggle').addEventListener('click', function (e) { e.stopPropagation(); state.transExpanded = !state.transExpanded; render(); });
-    if ($('speak-word')) $('speak-word').addEventListener('click', function () {
+    function bindTap(id, fn) {
+      var el = $(id);
+      if (!el) return;
+      var firedAt = 0;
+      function run(e) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        var now = Date.now();
+        if (now - firedAt < 350) return;
+        firedAt = now;
+        fn(e);
+      }
+      if (window.PointerEvent) el.addEventListener('pointerup', run);
+      else el.addEventListener('touchend', run, { passive: false });
+      el.addEventListener('click', run);
+    }
+
+    // 词查询浮窗：移动端用触摸抬起即响应，避免 click 被滚动/关闭浮窗抢走
+    bindTap('add-learning', markLearning);
+    bindTap('mark-known', markKnown);
+    bindTap('demote', demoteToLearning);
+    bindTap('trans-toggle', function () { state.transExpanded = !state.transExpanded; render(); });
+    bindTap('speak-word', function () {
       var d = state.lookup && state.lookup.data;
       speak((d && d.lemma) || (state.selected && state.selected.surface));
     });
@@ -4307,6 +4335,11 @@
   }
 
   // 点浮窗以外的空白处 → 关闭（未点「已掌握」则自动存为生词）；点别的单词由点词逻辑处理
+  var lastPopoverTouchAt = 0;
+  document.addEventListener('touchstart', function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('#popover')) lastPopoverTouchAt = Date.now();
+  }, true);
   document.addEventListener('mousedown', function (e) {
     if (!state.selected) return;
     var t = e.target;
@@ -4314,7 +4347,14 @@
     closePanel();
   }, true);
   // 滚动时关闭浮窗，避免它与单词错位
-  window.addEventListener('scroll', function () { if (state.selected) closePanel(); scheduleProgressSave(); }, true);
+  window.addEventListener('scroll', function (e) {
+    if (state.selected) {
+      var t = e.target;
+      if (t && t.closest && t.closest('#popover')) return;
+      if (Date.now() - lastPopoverTouchAt > 260) closePanel();
+    }
+    scheduleProgressSave();
+  }, true);
   function canTurnByGesture() {
     return state.tab === 'reading' && !state.composing && !!state.currentArticleId && !state.selected &&
       !state.showSettings && !state.showRankGuide && !state.rankUp && isPaged();
@@ -4379,6 +4419,7 @@
   }, { passive: false });
   var resizeTimer = null;
   window.addEventListener('resize', function () {
+    applySettings();
     if (state.selected) closePanel();
     if (state.tab !== 'reading' || state.composing || !state.currentArticleId) return;
     if (resizeTimer) clearTimeout(resizeTimer);
