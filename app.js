@@ -2285,6 +2285,27 @@
       '</div></div>';
   }
 
+  function modeIcon(id) {
+    return '<span class="mode-icon mi-' + esc(id) + '" aria-hidden="true"></span>';
+  }
+
+  function modeLabel(mode) {
+    for (var i = 0; i < MODES.length; i++) {
+      if (MODES[i].id === mode) return MODES[i].title;
+    }
+    return mode === 'match' ? '配对' : '复习';
+  }
+
+  function renderReviewHeader(title, sub, actions) {
+    return '<div class="review-set-header">' +
+      '<div class="review-title-block"><div class="review-eyebrow font-cjk">复习</div>' +
+        '<h2 class="font-display">' + esc(title) + '</h2>' +
+        (sub ? '<p class="font-cjk">' + sub + '</p>' : '') +
+      '</div>' +
+      '<div class="review-top-actions">' + (actions || '') + '</div>' +
+      '</div>';
+  }
+
   function renderReview() {
     var r = state.review;
     if (r) {
@@ -2295,25 +2316,6 @@
     if (state.reviewView === 'stats') return renderStats();
 
     var nL = state.vocabulary.length;
-    var rank = masteryRank();
-    var out = '<div class="wrap" style="padding-top:32px;padding-bottom:32px">' +
-      '<div class="row between" style="margin-bottom:18px">' +
-        '<h2 class="page-title font-display" style="margin:0">复习</h2>' +
-        '<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">' +
-          '<button class="btn-ghost" id="study-set-new">' + I.plus + '新建学习集</button>' +
-          '<button class="btn-ghost" id="rev-stats">' + I.sparkles + '学习记录</button>' +
-        '</div>' +
-      '</div>';
-    if (state.composingStudySet) {
-      out += renderStudySetComposer() + '</div>';
-      return out;
-    }
-    if (!nL) {
-      out += renderRankCard(rank) +
-        '<div class="list-empty">还没有可复习的词。先去阅读点词，或直接新建一个学习集。</div></div>';
-      return out;
-    }
-
     var reviewBookOpts = reviewBookOptions();
     var reviewBookId = currentReviewBookId();
     var selectedBook = currentStudySetOption(reviewBookOpts, reviewBookId);
@@ -2328,31 +2330,56 @@
     var streak = (state.stats && state.stats.streak) || 0;
     var startCount = due || setIds.length;
     var cue = due > 0 ? ('今天到期 ' + due + ' 词，优先按记忆进度推进。') : '今天没有到期词，可以自由练习这一组。';
+    var rank = masteryRank();
+    var actions = '<button class="review-action-btn" id="study-set-new">' + I.plus + '新建学习集</button>' +
+      '<button class="review-action-btn" id="rev-stats">' + I.sparkles + '学习记录</button>';
+    var out = '<div class="review-app-shell"><div class="review-stage">';
+    out += renderReviewHeader(nL ? bookLabel : '复习', nL ? ('学习中 ' + setIds.length + ' 词 · 已掌握 ' + masteredInSet + ' 词 · 连续 ' + streak + ' 天') : '创建学习集，或在阅读时点词加入生词库。', actions);
+    if (state.composingStudySet) {
+      out += renderStudySetComposer() + '</div></div>';
+      return out;
+    }
+    if (!nL) {
+      out += '<div class="review-empty-panel"><div class="circle">' + I.sparkles + '</div>' +
+        '<h3 class="font-display">还没有可复习的词</h3>' +
+        '<p class="font-cjk">先去阅读点词，或直接新建一个学习集。</p></div></div></div>';
+      return out;
+    }
 
-    out += '<div class="review-dashboard">' +
-      '<div class="srs-hero">' +
-        '<div class="hero-ring" style="--p:' + ring + '%"><div class="hr-inner"><span class="hr-num font-display">' + done + '</span><span class="hr-goal font-mono">/ ' + goal + '</span></div></div>' +
-        '<div class="hero-meta">' +
-          '<div class="study-kicker font-cjk">当前学习集</div>' +
-          '<div class="streak-line font-display">' + esc(bookLabel) + '</div>' +
-          '<div class="font-cjk" style="color:var(--inkMuted);font-size:13px;margin-top:2px">学习中 ' + setIds.length + ' 词　·　已掌握 ' + masteredInSet + ' 词　·　连续 ' + streak + ' 天</div>' +
-          renderStudySetSelect(reviewBookOpts, reviewBookId) +
-          '<div class="font-cjk" style="color:var(--inkMuted);font-size:12px;margin-top:8px">' + esc(cue) + '</div>' +
-          '<button class="btn-pill" id="start-today" style="margin-top:12px">继续学习　·　' + startCount + ' 词</button>' +
-        '</div></div>' +
-      renderRankCard(rank) +
-      '</div>';
+    out += '<div class="review-set-tools">' +
+      renderStudySetSelect(reviewBookOpts, reviewBookId) +
+      '<div class="review-stat-pills">' +
+        '<span>今日 ' + done + ' / ' + goal + '</span>' +
+        '<span>待学习 ' + due + '</span>' +
+        '<span>' + esc(rank.code) + '</span>' +
+      '</div></div>';
 
-    out += '<h3 class="font-display" style="font-size:15px;margin:28px 0 12px;color:var(--inkSoft)">五个模式</h3>' +
-      '<p class="font-cjk" style="color:var(--inkMuted);margin:0 0 14px;font-size:13px">每个模式都只使用当前学习集；做对做错会继续写入记忆进度。</p>';
     out += '<div class="mode-grid">';
     MODES.forEach(function (m) {
       out += '<button class="mode-card" data-mode="' + m.id + '">' +
-        '<span class="mc-title font-display">' + m.title + '</span>' +
-        '<span class="mc-desc font-cjk">' + m.desc + '</span></button>';
+        modeIcon(m.id) +
+        '<span class="mc-copy"><span class="mc-title font-display">' + m.title + '</span>' +
+        '<span class="mc-desc font-cjk">' + m.desc + '</span></span></button>';
     });
     out += '</div>';
-    out += '</div>';
+    var preview = studySetEntries(reviewBookId)[0] || null;
+    var previewWord = preview ? preview.lemma : '已掌握';
+    out += '<button class="study-preview-card" data-mode="flash">' +
+      '<span class="study-preview-top"><span class="font-cjk">显示提示</span>' +
+        '<span class="font-cjk">' + esc(cue) + '</span></span>' +
+      '<span class="study-preview-word font-display">' + esc(previewWord) + '</span>' +
+      '<span class="study-preview-shortcuts font-cjk"><b>快捷键</b><span>按</span><kbd>空格键</kbd><span>或单击卡片以翻页</span></span>' +
+      '</button>';
+    out += '<div class="review-bottom-bar">' +
+      '<div class="track-chip font-cjk"><span>跟踪进度</span><span class="fake-toggle"><i style="width:' + ring + '%"></i></span></div>' +
+      '<div class="review-mark-actions">' +
+        '<button class="review-round bad" data-mode="flash" title="单词卡">×</button>' +
+        '<span class="review-count font-mono">' + done + ' / ' + Math.max(goal, startCount) + '</span>' +
+        '<button class="review-round good" id="start-today" title="继续学习">✓</button>' +
+      '</div>' +
+      '<div class="review-mini-actions"><button id="rev-stats-mini" title="学习记录">↻</button><button id="study-set-new-mini" title="新建学习集">＋</button></div>' +
+      '</div>';
+    out += '</div></div>';
     return out;
   }
 
@@ -2459,9 +2486,9 @@
     var pct = Math.round(r.idx / Math.max(1, r.queue.length) * 100);
     var spk = TTS_OK ? '<button class="pop-spk" id="speak-review" title="朗读">' + I.volume + '</button>' : '';
 
-    var out = '<div class="wrap" style="padding-top:24px;padding-bottom:32px">' +
-      '<div class="rev-top"><button class="btn-ghost" id="exit-review">' + I.arrowLeft + '退出</button>' +
-      '<span class="font-mono" style="font-size:12px;color:var(--inkMuted)">剩余 ' + (r.queue.length - r.idx) + '</span></div>' +
+    var out = '<div class="review-app-shell review-live"><div class="review-stage">' +
+      renderReviewHeader(modeLabel(r.mode), '剩余 ' + (r.queue.length - r.idx) + ' · ' + r.idx + ' / ' + r.queue.length,
+        '<button class="review-action-btn" id="exit-review">' + I.arrowLeft + '退出</button>') +
       '<div class="rev-progress"><div style="width:' + pct + '%"></div></div>';
 
     out += '<div class="rev-card' + (r.mode === 'flash' && r.phase === 'back' ? ' flip-in' : '') + '">';
@@ -2528,7 +2555,7 @@
       }
     }
 
-    out += '</div></div>';
+    out += '</div></div></div>';
     return out;
   }
 
@@ -2536,17 +2563,17 @@
   function renderMatch() {
     var r = state.review;
     if (r.matched >= r.pairs) {
-      return '<div class="wrap" style="padding-top:48px;padding-bottom:32px">' +
-        '<div class="empty"><div class="circle">' + I.check + '</div>' +
+      return '<div class="review-app-shell review-live"><div class="review-stage">' +
+        '<div class="review-empty-panel"><div class="circle">' + I.check + '</div>' +
         '<h3 class="font-display">配对完成</h3>' +
         '<p class="font-cjk">' + r.pairs + ' 组　·　用了 ' + r.moves + ' 步</p>' +
         '<div class="row" style="justify-content:center;gap:10px">' +
-          '<button class="btn-pill" id="match-again">再来一组</button>' +
-          '<button class="btn-pill ghost-pill" id="exit-review">返回</button></div></div></div>';
+          '<button class="review-action-btn primary" id="match-again">再来一组</button>' +
+          '<button class="review-action-btn" id="exit-review">返回</button></div></div></div></div>';
     }
-    var out = '<div class="wrap" style="padding-top:24px;padding-bottom:32px">' +
-      '<div class="rev-top"><button class="btn-ghost" id="exit-review">' + I.arrowLeft + '退出</button>' +
-      '<span class="font-mono" style="font-size:12px;color:var(--inkMuted)">配对 ' + r.matched + ' / ' + r.pairs + '</span></div>' +
+    var out = '<div class="review-app-shell review-live"><div class="review-stage">' +
+      renderReviewHeader('配对', '配对 ' + r.matched + ' / ' + r.pairs,
+        '<button class="review-action-btn" id="exit-review">' + I.arrowLeft + '退出</button>') +
       '<p class="rev-prompt font-cjk" style="text-align:center;margin-top:8px">点一个单词，再点它的释义</p>' +
       '<div class="match-grid">';
     r.tiles.forEach(function (t, i) {
@@ -2556,7 +2583,7 @@
       else if (r.wrong && r.wrong.indexOf(i) >= 0) cls += ' wrong';
       out += '<button class="' + cls + ' font-cjk" data-tile="' + i + '"' + (t.matched ? ' disabled' : '') + '>' + esc(t.text) + '</button>';
     });
-    out += '</div></div>';
+    out += '</div></div></div>';
     return out;
   }
 
@@ -2565,11 +2592,11 @@
     var summary = (r.mode === 'flash')
       ? '认识并移出 ' + r.stats.graduated + ' 词　·　还需再练 ' + r.stats.stillLearning + ' 词'
       : '答对 ' + r.stats.correct + ' / ' + r.stats.answered + ' 题';
-    return '<div class="wrap" style="padding-top:48px;padding-bottom:32px">' +
-      '<div class="empty"><div class="circle">' + I.check + '</div>' +
+    return '<div class="review-app-shell review-live"><div class="review-stage">' +
+      '<div class="review-empty-panel"><div class="circle">' + I.check + '</div>' +
       '<h3 class="font-display">学习完成</h3>' +
       '<p class="font-cjk">' + summary + '</p>' +
-      '<button class="btn-pill" id="exit-review">返回</button></div></div>';
+      '<button class="review-action-btn primary" id="exit-review">返回</button></div></div></div>';
   }
 
   function emptyState(icon, title, sub, actionLabel, actionId) {
@@ -4224,6 +4251,12 @@
       state.newStudySetWords = '';
       render();
     });
+    if ($('study-set-new-mini')) $('study-set-new-mini').addEventListener('click', function () {
+      state.composingStudySet = true;
+      state.newStudySetName = '';
+      state.newStudySetWords = '';
+      render();
+    });
     if ($('study-set-cancel')) $('study-set-cancel').addEventListener('click', function () { state.composingStudySet = false; render(); });
     if ($('study-set-cancel-2')) $('study-set-cancel-2').addEventListener('click', function () { state.composingStudySet = false; render(); });
     if ($('study-set-name')) $('study-set-name').addEventListener('input', function (e) { state.newStudySetName = e.target.value; });
@@ -4234,6 +4267,7 @@
     });
     if ($('study-set-create')) $('study-set-create').addEventListener('click', createStudySetFromReview);
     if ($('rev-stats')) $('rev-stats').addEventListener('click', function () { state.reviewView = 'stats'; render(); });
+    if ($('rev-stats-mini')) $('rev-stats-mini').addEventListener('click', function () { state.reviewView = 'stats'; render(); });
     if ($('stats-back')) $('stats-back').addEventListener('click', function () { state.reviewView = 'home'; render(); });
     if ($('goal-dec')) $('goal-dec').addEventListener('click', function () { if (!state.stats) state.stats = defaultStats(); state.stats.goal = Math.max(5, (state.stats.goal || 20) - 5); saveStats(); render(); });
     if ($('goal-inc')) $('goal-inc').addEventListener('click', function () { if (!state.stats) state.stats = defaultStats(); state.stats.goal = Math.min(200, (state.stats.goal || 20) + 5); saveStats(); render(); });
@@ -4243,6 +4277,12 @@
     if ($('flash-know')) $('flash-know').addEventListener('click', flashKnow);
     if ($('flash-keep')) $('flash-keep').addEventListener('click', flashKeep);
     if ($('speak-review')) $('speak-review').addEventListener('click', function () { var e = curEntry(); if (e) speak(e.lemma); });
+    var revCardEl = document.querySelector('.rev-card');
+    if (revCardEl) revCardEl.addEventListener('click', function (e) {
+      if (!state.review || state.review.mode !== 'flash' || state.review.phase !== 'front') return;
+      if (e.target && e.target.closest && e.target.closest('button,input,textarea,select,a')) return;
+      flipCard();
+    });
     document.querySelectorAll('[data-choice]').forEach(function (b) {
       b.addEventListener('click', function () { pickChoice(parseInt(b.getAttribute('data-choice'), 10)); });
     });
@@ -4349,6 +4389,22 @@
   });
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && state.showSettings) { state.showSettings = false; render(); return; }
+    if (state.tab === 'review') {
+      if (e.target && e.target.closest && e.target.closest('input,textarea,select,button,a')) return;
+      if (e.key === 'Escape' && state.review) { state.review = null; render(); return; }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        var r = state.review;
+        if (!r) { startStudyMode('flash'); return; }
+        if (r.mode === 'flash') {
+          if (r.phase === 'front') flipCard();
+          return;
+        }
+        if (r.questionKind === 'write' && r.writeChecked) { writeContinue(); return; }
+        if (r.choices && r.picked !== null) mcContinue();
+        return;
+      }
+    }
     if (!canTurnByGesture()) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); turnPage(1); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); turnPage(-1); }
