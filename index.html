@@ -13,6 +13,7 @@
     --bg:#F5EDE0; --bgSoft:#FAF4E8; --ink:#2D2419; --inkSoft:#5A4A38;
     --inkMuted:#8A7758; --accent:#C77B3A; --accentDeep:#A05E25;
     --border:rgba(45,36,25,0.12); --borderStrong:rgba(45,36,25,0.2);
+    --font-ui:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Helvetica Neue',Arial,sans-serif;
     --font-display:Georgia,'Times New Roman','Songti SC','STSong','Noto Serif CJK SC',serif;
     --font-reading:Georgia,'Times New Roman','Songti SC','STSong','Noto Serif CJK SC',serif;
     --font-cjk:'Songti SC','STSong','Noto Serif CJK SC','PingFang SC',serif;
@@ -883,16 +884,20 @@
     .reader-fixed main{ height:100svh; height:100dvh; }
     .reader-wrap{
       height:100svh; height:100dvh; width:100%; max-width:none;
+      font-family:var(--font-ui);
       padding:calc(34px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
     }
-    .reader-scroll{ padding:calc(30px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom)); }
+    .reader-scroll{
+      padding:calc(30px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom));
+      font-family:var(--font-ui);
+    }
     .reader-top{
       min-height:44px; margin:0 0 12px; gap:10px;
       grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
     }
     .reader-top .btn-ghost{
       min-height:38px; padding:0 8px 0 0; border-radius:10px;
-      color:var(--inkSoft); font-size:13px; font-family:var(--font-cjk);
+      color:var(--inkSoft); font-size:13px; font-family:var(--font-ui); font-weight:500;
     }
     .reader-top .btn-ghost svg{ width:18px; height:18px; }
     .reader-top .icon-btn{
@@ -905,9 +910,21 @@
     }
     .readbar{ height:5px; margin:0 0 18px; background:rgba(45,36,25,.10); }
     .readbar > div{ background:#2FA75A; }
-    .article-title{ font-size:23px; line-height:1.14; margin:0 0 18px; letter-spacing:0; }
-    .reading-content{ font-size:var(--reader-fs,18px); line-height:1.72; letter-spacing:0; }
+    .article-title{
+      font-family:var(--font-ui); font-size:24px; line-height:1.16; margin:0 0 18px;
+      letter-spacing:0; color:#17283A; font-weight:750;
+    }
+    .reading-content{
+      font-family:var(--font-ui); font-size:calc(var(--reader-fs,18px) + 1px);
+      line-height:1.78; letter-spacing:0; color:#17283A; font-weight:400;
+    }
     .reading-content p{ margin-bottom:1.08em; }
+    .word-new,.word-learning,.word-known{
+      border-radius:5px; padding:0 3px; margin:0 -1px; text-decoration:none;
+    }
+    .word-new{ background-color:rgba(70,120,180,.12); border-bottom-color:rgba(70,120,180,.34); }
+    .word-learning{ background-color:rgba(78,168,92,.18); border-bottom-color:rgba(47,167,90,.42); }
+    .word-active{ background-color:rgba(47,167,90,.22) !important; }
     .page-shell{ padding:0 12px 38px; }
     .page-shell::after{ left:0; right:0; bottom:0; height:34px; }
     .page-edge{
