@@ -914,8 +914,16 @@
     }, 40);
   }
 
+  function progressStorageKey(key) {
+    return 'article:' + key;
+  }
+
   function progressOf(id) {
-    return (state.readProgress && state.readProgress[id]) || {};
+    var direct = (state.readProgress && state.readProgress[id]) || null;
+    if (direct) return direct;
+    var art = state.articles.find(function (a) { return a.id === id; });
+    if (!art) return {};
+    return (state.readProgress && state.readProgress[progressStorageKey(articlePackKey(art))]) || {};
   }
 
   function progressText(id) {
@@ -965,7 +973,9 @@
     }
     var old = progressOf(cur.id);
     if (!force && old.page === page && Math.abs((old.scroll || 0) - y) < 120 && old.pct === pct) return;
-    state.readProgress[cur.id] = { page: page, scroll: y, pct: pct, updatedAt: Date.now(), done: pct >= 95 };
+    var prog = { page: page, scroll: y, pct: pct, updatedAt: Date.now(), done: pct >= 95 };
+    state.readProgress[cur.id] = prog;
+    state.readProgress[progressStorageKey(articlePackKey(cur))] = prog;
     saveProgress();
   }
 
@@ -989,13 +999,15 @@
     state.pageTurn = next > (state.articlePage || 0) ? 'turn-next' : 'turn-prev';
     state.articlePage = next;
     window.scrollTo(0, 0);
-    state.readProgress[cur.id] = {
+    var pageProg = {
       page: next,
       scroll: 0,
       pct: Math.round(((next + 1) / Math.max(1, pages.length)) * 100),
       updatedAt: Date.now(),
       done: next >= pages.length - 1
     };
+    state.readProgress[cur.id] = pageProg;
+    state.readProgress[progressStorageKey(articlePackKey(cur))] = pageProg;
     saveProgress();
     render();
     setTimeout(function () { state.pageTurn = ''; }, 380);
@@ -3476,6 +3488,64 @@
   }
 
   // ---------- 导出/导入 ----------
+  function normalizeProgress(p) {
+    if (!p || typeof p !== 'object') return null;
+    return {
+      page: Math.max(0, parseInt(p.page, 10) || 0),
+      scroll: Math.max(0, Number(p.scroll) || 0),
+      pct: Math.max(0, Math.min(100, parseInt(p.pct, 10) || 0)),
+      updatedAt: Number(p.updatedAt) || 0,
+      done: !!p.done
+    };
+  }
+  function newerProgress(a, b) {
+    var bb = normalizeProgress(b);
+    if (!bb) return normalizeProgress(a);
+    var aa = normalizeProgress(a);
+    if (!aa) return bb;
+    return (bb.updatedAt || 0) >= (aa.updatedAt || 0) ? bb : aa;
+  }
+  function buildReadProgressIndex() {
+    var out = {};
+    state.articles.forEach(function (a) {
+      var p = progressOf(a.id);
+      if (!p || (!p.pct && !p.page && !p.scroll)) return;
+      var key = articlePackKey(a);
+      if (key) out[key] = newerProgress(out[key], p);
+    });
+    return out;
+  }
+  function mergeReadProgress(incoming, incomingIndex, incomingArticles) {
+    var merged = Object.assign({}, state.readProgress || {});
+    var idx = {};
+    if (incoming && typeof incoming === 'object') {
+      Object.keys(incoming).forEach(function (k) {
+        merged[k] = newerProgress(merged[k], incoming[k]);
+      });
+    }
+    if (incomingIndex && typeof incomingIndex === 'object') {
+      Object.keys(incomingIndex).forEach(function (k) {
+        idx[k] = newerProgress(idx[k], incomingIndex[k]);
+      });
+    }
+    if (Array.isArray(incomingArticles) && incoming && typeof incoming === 'object') {
+      incomingArticles.forEach(function (a) {
+        if (!a || !a.id || !incoming[a.id]) return;
+        var key = articlePackKey(a);
+        if (key) idx[key] = newerProgress(idx[key], incoming[a.id]);
+      });
+    }
+    Object.keys(idx).forEach(function (key) {
+      merged[progressStorageKey(key)] = newerProgress(merged[progressStorageKey(key)], idx[key]);
+    });
+    state.articles.forEach(function (a) {
+      var key = articlePackKey(a);
+      var p = idx[key] || merged[progressStorageKey(key)];
+      if (p) merged[a.id] = newerProgress(merged[a.id], p);
+    });
+    return merged;
+  }
+
   function cloudPayload() {
     var p = backupPayload();
     // 文章正文只在 Firebase（分块上传，不受 1MB 限制）且开了「同步文章库」时才上传；
@@ -3501,6 +3571,7 @@
       vocabulary: state.vocabulary,
       known: state.known,
       readProgress: state.readProgress,
+      readProgressIndex: buildReadProgressIndex(),
       customBooks: state.customBooks,
       stats: state.stats,
       settings: state.settings,
@@ -3529,7 +3600,7 @@
     state.articles.forEach(function (art) { if (!art.book) art.book = art.title || '未命名'; });
     state.vocabulary = Array.isArray(d.vocabulary) ? d.vocabulary : [];
     state.known = Array.isArray(d.known) ? d.known : [];
-    if (d.readProgress && typeof d.readProgress === 'object') state.readProgress = d.readProgress;
+    state.readProgress = mergeReadProgress(d.readProgress, d.readProgressIndex, d.articles);
     state.customBooks = Array.isArray(d.customBooks) ? d.customBooks : [];
     state.customBooks.forEach(function (b) { if (!Array.isArray(b.words)) b.words = []; });
     state.stats = (d.stats && typeof d.stats === 'object') ? d.stats : defaultStats();
@@ -4069,8 +4140,10 @@
       b.addEventListener('click', function (e) {
         e.stopPropagation();
         var id = b.getAttribute('data-del-art');
+        var oldArticle = state.articles.find(function (a) { return a.id === id; });
         state.articles = state.articles.filter(function (a) { return a.id !== id; });
         if (state.readProgress) delete state.readProgress[id];
+        if (oldArticle && state.readProgress) delete state.readProgress[progressStorageKey(articlePackKey(oldArticle))];
         if (state.currentArticleId === id) state.currentArticleId = null;
         saveArticles(); saveProgress(); render();
       });
@@ -4081,7 +4154,12 @@
         var name = b.getAttribute('data-del-book');
         var cnt = state.articles.filter(function (a) { return shelfNameForArticle(a) === name; }).length;
         if (!confirm('删除《' + name + '》共 ' + cnt + ' 篇？此操作不可撤销。')) return;
-        state.articles.forEach(function (a) { if (shelfNameForArticle(a) === name && state.readProgress) delete state.readProgress[a.id]; });
+        state.articles.forEach(function (a) {
+          if (shelfNameForArticle(a) === name && state.readProgress) {
+            delete state.readProgress[a.id];
+            delete state.readProgress[progressStorageKey(articlePackKey(a))];
+          }
+        });
         state.articles = state.articles.filter(function (a) { return shelfNameForArticle(a) !== name; });
         if (state.currentBook === name) state.currentBook = null;
         saveArticles(); saveProgress(); render();
