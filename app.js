@@ -943,6 +943,7 @@
     if (!a) return;
     state.currentBook = shelfNameForArticle(a);
     state.currentArticleId = id;
+    state.sentenceTrans = null;
     var pr = progressOf(id);
     state.articlePage = restore && pr.page ? pr.page : 0;
     window.scrollTo(0, 0);
@@ -1000,6 +1001,7 @@
     updateReadingProgress(true);
     state.pageTurn = next > (state.articlePage || 0) ? 'turn-next' : 'turn-prev';
     state.articlePage = next;
+    state.sentenceTrans = null;
     window.scrollTo(0, 0);
     var pageProg = {
       page: next,
@@ -1131,7 +1133,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.4 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.6 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1149,7 +1151,7 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.4 · local</span></div>' +
+      '<span class="ver font-mono">1.8.6 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
@@ -1169,6 +1171,7 @@
     html += '</main>';
 
     if (state.selected) html += renderPanel();
+    if (state.sentenceTrans) html += renderSentenceTranslationPanel();
     if (state.showSettings) html += renderSettings();
     if (state.showRankGuide) html += renderRankGuide();
     if (state.rankUp) html += renderRankUp();
@@ -2944,48 +2947,56 @@
       return text;
     });
   }
-  function translateSelectedSentence() {
-    var sel = state.selected;
-    if (!sel || !sel.sentence) return;
-    var key = sentenceKey(sel.sentence);
-    if (!key) return;
+  function sentencePopoverStyle(rect) {
+    var W = 360, MAXH = 360, GAP = 10;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var r = rect || { left: vw / 2 - W / 2, right: vw / 2 + W / 2, top: vh / 2, bottom: vh / 2 };
+    var left = Math.max(GAP, Math.min(r.left, vw - W - GAP));
+    var below = (r.bottom + MAXH + GAP <= vh) || (r.top - MAXH - GAP < GAP);
+    if (below) return 'left:' + left + 'px;top:' + (r.bottom + GAP) + 'px;';
+    return 'left:' + left + 'px;bottom:' + (vh - r.top + GAP) + 'px;';
+  }
+  function startSentenceTranslation(text, rect) {
+    var key = sentenceKey(text);
+    if (!key || wordCount(key) < 3 || !/[a-zA-Z]/.test(key)) return;
+    state.selected = null;
+    state.lookup = null;
+    state.transExpanded = false;
     if (SENTENCE_TRANSLATION_CACHE[key]) {
-      state.sentenceTrans = SENTENCE_TRANSLATION_CACHE[key];
+      state.sentenceTrans = Object.assign({}, SENTENCE_TRANSLATION_CACHE[key], { rect: rect || null });
       render();
       return;
     }
-    var base = { key: key, text: sel.sentence, loading: true, translation: '', error: '', glossary: sentenceGlossary(sel.sentence) };
+    var base = { key: key, text: key, rect: rect || null, loading: true, translation: '', error: '', glossary: sentenceGlossary(key) };
     state.sentenceTrans = base;
     render();
-    fetchSentenceTranslation(sel.sentence).then(function (translation) {
-      var done = { key: key, text: sel.sentence, loading: false, translation: translation, error: '', glossary: sentenceGlossary(sel.sentence) };
+    fetchSentenceTranslation(key).then(function (translation) {
+      var done = { key: key, text: key, loading: false, translation: translation, error: '', glossary: sentenceGlossary(key) };
       SENTENCE_TRANSLATION_CACHE[key] = done;
-      if (state.selected && sentenceKey(state.selected.sentence) === key) {
-        state.sentenceTrans = done;
+      if (state.sentenceTrans && state.sentenceTrans.key === key) {
+        state.sentenceTrans = Object.assign({}, done, { rect: rect || null });
         render();
       }
     }).catch(function (err) {
       var fail = {
-        key: key, text: sel.sentence, loading: false, translation: '',
+        key: key, text: key, loading: false, translation: '',
         error: (err && err.message) ? err.message : '在线翻译失败，先看关键词拆解。',
-        glossary: sentenceGlossary(sel.sentence)
+        glossary: sentenceGlossary(key)
       };
-      if (state.selected && sentenceKey(state.selected.sentence) === key) {
-        state.sentenceTrans = fail;
+      if (state.sentenceTrans && state.sentenceTrans.key === key) {
+        state.sentenceTrans = Object.assign({}, fail, { rect: rect || null });
         render();
       }
     });
   }
-  function renderSentenceAssist(sel) {
-    if (!sel || !sel.sentence) return '';
-    var key = sentenceKey(sel.sentence);
-    var st = state.sentenceTrans && state.sentenceTrans.key === key ? state.sentenceTrans : null;
-    var btnText = st && st.loading ? '翻译中…' : (st && st.translation ? '已翻译本句' : (st && st.error ? '重试翻译本句' : '在线翻译本句'));
-    var out = '<button class="pop-btn ghost small font-display" id="sentence-translate"' + (st && st.loading ? ' disabled' : '') + '>' + btnText + '</button>';
-    if (!st) return out;
-    out += '<div class="sentence-assist font-cjk">';
+  function renderSentenceTranslationPanel() {
+    var st = state.sentenceTrans;
+    if (!st || !st.key) return '';
+    var out = '<div class="sentence-popover font-cjk" id="sentence-popover" style="' + sentencePopoverStyle(st.rect) + '">' +
+      '<div class="sent-head"><span>句子翻译</span><button class="icon-btn" id="sentence-close" title="关闭">' + I.x + '</button></div>';
+    out += '<div class="sent-source font-reading">' + esc(st.text) + '</div>';
     if (st.loading) {
-      out += '<div class="sent-loading">正在翻译这句话…</div>';
+      out += '<div class="sent-loading">正在翻译选中的句子…</div>';
     } else if (st.translation) {
       out += '<div class="sent-cn">' + esc(st.translation) + '</div>';
     } else if (st.error) {
@@ -3034,7 +3045,6 @@
     }
 
     html += '<div class="pop-foot">';
-    html += renderSentenceAssist(sel);
     if (sel.status === 'known') {
       html += '<button class="pop-btn ghost font-display" id="demote">' + I.bookMarked + ' 移回生词</button>';
     } else if (sel.status === 'green') {
@@ -3055,7 +3065,7 @@
     var rc = rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null;
     state.selected = { surface: surface, sentence: sentence, si: si, status: st, handled: false, rect: rc };
     state.transExpanded = false; // 每次点新词默认收起多余义项
-    if (state.sentenceTrans && state.sentenceTrans.key !== sentenceKey(sentence)) state.sentenceTrans = null;
+    state.sentenceTrans = null;
 
     // 释义：已在生词库的优先用已存数据，否则查词典
     var sl = surface.toLowerCase(), lem = resolveLemma(surface);
@@ -3155,6 +3165,34 @@
   }
 
   function closePanel() { commitNewIfPending(); state.selected = null; state.lookup = null; render(); }
+  function closeSentenceTranslation() { state.sentenceTrans = null; render(); }
+
+  function readerSelectionInfo() {
+    var body = document.getElementById('article-body');
+    if (!body || !window.getSelection) return null;
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount < 1 || sel.isCollapsed) return null;
+    var text = sel.toString().replace(/\s+/g, ' ').trim();
+    if (!text || wordCount(text) < 3 || !/[a-zA-Z]/.test(text)) return null;
+    var range = sel.getRangeAt(0);
+    var root = range.commonAncestorContainer;
+    if (root && root.nodeType === 3) root = root.parentNode;
+    if (!root || !body.contains(root)) return null;
+    if (text.length > 650) text = text.slice(0, 650).replace(/\s+\S*$/, '').trim();
+    var rect = range.getBoundingClientRect();
+    var rc = rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null;
+    return { text: text, rect: rc };
+  }
+
+  function handleReaderSentenceSelection() {
+    var info = readerSelectionInfo();
+    if (!info) return;
+    startSentenceTranslation(info.text, info.rect);
+    try {
+      var sel = window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    } catch (e) {}
+  }
 
   // ---------- 词汇库管理 ----------
   function makeVocabFromLemma(lemma) {
@@ -4308,7 +4346,7 @@
     var $ = function (id) { return document.getElementById(id); };
 
     document.querySelectorAll('[data-tab]').forEach(function (b) {
-      b.addEventListener('click', function () { autoMarkCurrentPage(); updateReadingProgress(true); commitNewIfPending(); state.tab = b.getAttribute('data-tab'); state.reviewView = 'home'; state.selected = null; state.lookup = null; render(); });
+      b.addEventListener('click', function () { autoMarkCurrentPage(); updateReadingProgress(true); commitNewIfPending(); state.tab = b.getAttribute('data-tab'); state.reviewView = 'home'; state.selected = null; state.lookup = null; state.sentenceTrans = null; render(); });
     });
 
     if ($('btn-autospeak')) $('btn-autospeak').addEventListener('click', function () {
@@ -4606,7 +4644,10 @@
     // 文章正文点词（事件委托）
     var body = $('article-body');
     if (body) {
+      body.addEventListener('mouseup', function () { setTimeout(handleReaderSentenceSelection, 0); });
+      body.addEventListener('touchend', function () { setTimeout(handleReaderSentenceSelection, 260); }, { passive: true });
       body.addEventListener('click', function (e) {
+        if (readerSelectionInfo()) return;
         var t = e.target;
         if (t && t.hasAttribute && t.hasAttribute('data-w')) {
           handleWordClick(t.getAttribute('data-w'), parseInt(t.getAttribute('data-si'), 10), t.getBoundingClientRect());
@@ -4638,7 +4679,7 @@
     bindTap('mark-known', markKnown);
     bindTap('demote', demoteToLearning);
     bindTap('trans-toggle', function () { state.transExpanded = !state.transExpanded; render(); });
-    bindTap('sentence-translate', translateSelectedSentence);
+    bindTap('sentence-close', closeSentenceTranslation);
     bindTap('speak-word', function () {
       var d = state.lookup && state.lookup.data;
       speak((d && d.lemma) || (state.selected && state.selected.surface));
@@ -4767,7 +4808,7 @@
   }
   function isInteractiveGestureTarget(el) {
     if (!el || !el.closest) return false;
-    return !!el.closest('button,input,textarea,select,a,.popover,.drawer,.set-card,.rank-guide-card,.rank-up-card');
+    return !!el.closest('button,input,textarea,select,a,.popover,.sentence-popover,.drawer,.set-card,.rank-guide-card,.rank-up-card');
   }
 
   var swipe = { active: false, x: 0, y: 0, t: 0, horizontal: false };
