@@ -2280,6 +2280,211 @@
     return opts[0] || { id: 'all', name: '全部生词', count: 0 };
   }
 
+  var DAILY_WORD_LIMIT = 8;
+  var DAILY_REC_CACHE = { sig: '', pack: null };
+  var DAILY_FUNCTION_WORDS = {
+    a:1, an:1, the:1, and:1, or:1, but:1, if:1, because:1, as:1, than:1, then:1, so:1,
+    to:1, of:1, in:1, on:1, at:1, by:1, for:1, from:1, with:1, without:1, into:1, onto:1,
+    over:1, under:1, above:1, below:1, between:1, among:1, through:1, during:1, before:1,
+    after:1, about:1, against:1, around:1, across:1, within:1, beyond:1, upon:1,
+    i:1, me:1, my:1, mine:1, we:1, us:1, our:1, ours:1, you:1, your:1, yours:1,
+    he:1, him:1, his:1, she:1, her:1, hers:1, it:1, its:1, they:1, them:1, their:1, theirs:1,
+    this:1, that:1, these:1, those:1, there:1, here:1, who:1, whom:1, whose:1, which:1, what:1,
+    when:1, where:1, why:1, how:1, all:1, any:1, some:1, each:1, every:1, either:1, neither:1,
+    be:1, am:1, is:1, are:1, was:1, were:1, been:1, being:1, have:1, has:1, had:1, do:1, does:1,
+    did:1, can:1, could:1, may:1, might:1, must:1, shall:1, should:1, will:1, would:1, not:1,
+    no:1, yes:1, also:1, very:1, just:1, even:1, only:1, own:1, same:1, such:1, one:1, two:1
+  };
+
+  function dailyRecommendationScope() {
+    var groups = groupBooks();
+    var shelf = '';
+    var cur = state.articles.find(function (a) { return a.id === state.currentArticleId; });
+    if (cur) shelf = shelfNameForArticle(cur);
+    if (!shelf && state.currentBook) {
+      var fromBook = shelfNameForBook(state.currentBook);
+      if (groups.map[fromBook]) shelf = fromBook;
+    }
+    if (!shelf) {
+      var latest = null, latestAt = 0;
+      state.articles.forEach(function (a) {
+        var p = progressOf(a.id);
+        var t = (p && p.updatedAt) || 0;
+        if (t > latestAt) { latest = a; latestAt = t; }
+      });
+      if (latest) shelf = shelfNameForArticle(latest);
+    }
+    if (!shelf && groups.order.length) shelf = groups.order[0];
+    var list = shelf && groups.map[shelf] ? groups.map[shelf].slice() : state.articles.slice();
+    return { shelf: shelf || '全部文章', articles: list };
+  }
+
+  function dailyTieValue(lemma) {
+    var s = todayStr() + ':' + String(lemma || '');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h % 1000) / 1000;
+  }
+
+  function isDailyFunctionWord(lemma, entry) {
+    var ll = String(lemma || '').toLowerCase();
+    if (ll.length < 3 || DAILY_FUNCTION_WORDS[ll]) return true;
+    if (/^[a-z]$/.test(ll) || /'\w+$/.test(ll)) return true;
+    var pos = String((entry && entry.pos) || '').toLowerCase();
+    if (/\b(pron|prep|conj|art|det|aux|modal|num|interj|int)\b/.test(pos)) return true;
+    var firstTrans = String((entry && entry.trans) || '').split(/[\n;；]/)[0].toLowerCase();
+    if (/^(pron|prep|conj|art|det|aux|modal|num|interj|int)\./.test(firstTrans)) return true;
+    return false;
+  }
+
+  function dailyWordScore(item) {
+    var freq = dictFreq(item.lemma);
+    var common = isFinite(freq) ? freqWeight(freq) : 0.18;
+    var tag = String((item.entry && item.entry.tag) || '');
+    var examBoost = /\bielts\b/i.test(tag) ? 9 : (/\b(cet6|toefl|gre|ky)\b/i.test(tag) ? 5 : 0);
+    var lengthBoost = item.lemma.length >= 6 ? 2 : 0;
+    return item.count * 4 + item.articleHits * 11 + common * 26 + examBoost + lengthBoost + dailyTieValue(item.lemma);
+  }
+
+  function dailyRecommendationSignature(scope, articles, limit) {
+    var articleSig = articles.map(function (a) {
+      return [a.id, a.updatedAt || a.createdAt || 0, String(a.content || '').length].join(':');
+    }).join(',');
+    return [
+      todayStr(),
+      limit || DAILY_WORD_LIMIT,
+      scope.shelf,
+      state.vocabulary.length,
+      state.known.length,
+      articleSig
+    ].join('|');
+  }
+
+  function dailyWordRecommendationPack(limit) {
+    var scope = dailyRecommendationScope();
+    var saved = savedFormsSet(), known = knownSet();
+    var map = {};
+    var articles = scope.articles.slice();
+    if (articles.length > 140) {
+      articles.sort(function (a, b) {
+        var pa = progressOf(a.id), pb = progressOf(b.id);
+        return ((pb && pb.updatedAt) || b.updatedAt || b.createdAt || 0) - ((pa && pa.updatedAt) || a.updatedAt || a.createdAt || 0);
+      });
+      articles = articles.slice(0, 140);
+    }
+    var sig = dailyRecommendationSignature(scope, articles, limit);
+    if (DAILY_REC_CACHE.sig === sig && DAILY_REC_CACHE.pack) return DAILY_REC_CACHE.pack;
+    articles.forEach(function (article) {
+      var seenInArticle = {};
+      var sentences = String(article.content || '').match(/[^.!?…]+[.!?…]+["'”’]?\s*|[^.!?…]+$/g) || [];
+      sentences.forEach(function (sentence) {
+        var cleanSentence = sentence.trim();
+        if (!cleanSentence) return;
+        var tokens = cleanSentence.match(/[a-zA-Z]+(?:['’\-][a-zA-Z]+)*/g) || [];
+        tokens.forEach(function (tok) {
+          var raw = tok.toLowerCase();
+          var found = lookupWord(tok);
+          if (!found || !found.entry) return;
+          var lemma = found.lemma.toLowerCase();
+          var entry = found.entry || DICT.get(lemma);
+          if (!entry || known.has(raw) || known.has(lemma) || saved.has(raw) || saved.has(lemma)) return;
+          if (isDailyFunctionWord(lemma, entry)) return;
+          var item = map[lemma];
+          if (!item) item = map[lemma] = { lemma: lemma, entry: entry, count: 0, articleHits: 0, examples: [] };
+          item.count++;
+          if (!seenInArticle[lemma]) { item.articleHits++; seenInArticle[lemma] = 1; }
+          if (item.examples.length < 2 && cleanSentence.length <= 220 &&
+            !item.examples.some(function (ex) { return ex.sentence === cleanSentence; })) {
+            item.examples.push({ sentence: cleanSentence, surface: tok, title: article.title || '' });
+          }
+        });
+      });
+    });
+    var recs = Object.keys(map).map(function (key) {
+      var item = map[key];
+      item.score = dailyWordScore(item);
+      return item;
+    }).sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return dictFreq(a.lemma) - dictFreq(b.lemma) || a.lemma.localeCompare(b.lemma);
+    });
+    var pack = { scope: scope, recs: recs.slice(0, limit || DAILY_WORD_LIMIT), total: recs.length };
+    DAILY_REC_CACHE = { sig: sig, pack: pack };
+    return pack;
+  }
+
+  function ensureDailyRecommendedWord(lemma, rec) {
+    var ll = String(lemma || '').toLowerCase();
+    if (!ll || knownSet().has(ll)) return null;
+    var existing = state.vocabulary.find(function (v) { return String(v.lemma).toLowerCase() === ll; });
+    if (existing) return existing.id;
+    var v = makeVocabFromLemma(ll);
+    var ex = rec && rec.examples && rec.examples[0];
+    if (ex) v.contexts = [{ sentence: ex.sentence, surface: ex.surface || ll, at: Date.now(), article: ex.title || '' }];
+    v.source = 'daily-recommendation';
+    state.vocabulary.unshift(v);
+    return v.id;
+  }
+
+  function addDailyRecommendationWord(lemma) {
+    var pack = dailyWordRecommendationPack(DAILY_WORD_LIMIT);
+    var rec = pack.recs.find(function (r) { return r.lemma === String(lemma || '').toLowerCase(); });
+    var id = ensureDailyRecommendedWord(lemma, rec);
+    if (!id) { alert('这个词已经在生词库或已掌握里了。'); return; }
+    saveVocab();
+    render();
+  }
+
+  function startDailyRecommendedWords() {
+    var pack = dailyWordRecommendationPack(DAILY_WORD_LIMIT);
+    var ids = [];
+    pack.recs.forEach(function (rec) {
+      var id = ensureDailyRecommendedWord(rec.lemma, rec);
+      if (id && ids.indexOf(id) < 0) ids.push(id);
+    });
+    if (!ids.length) {
+      alert('今天暂时没有新的推荐词。读一章或导入一本书后再来看看。');
+      render();
+      return;
+    }
+    saveVocab();
+    startReview(ids, 'learn', { keepOrder: true });
+  }
+
+  function renderDailyWordRecommendations() {
+    var pack = dailyWordRecommendationPack(DAILY_WORD_LIMIT);
+    var recs = pack.recs;
+    var source = pack.scope && pack.scope.shelf ? pack.scope.shelf : '当前书籍';
+    var out = '<section class="daily-word-rec">' +
+      '<div class="daily-word-head">' +
+        '<div><div class="daily-word-kicker font-cjk">每日生词推荐</div>' +
+        '<h3 class="font-display">今天先背这' + (recs.length ? ' ' + recs.length + ' ' : '几') + '个</h3>' +
+        '<p class="font-cjk">根据《' + esc(source) + '》里尚未掌握、未加入生词库的出现频率排序。</p></div>' +
+        '<div class="daily-word-actions"><button class="btn-pill" id="daily-rec-start"' + (recs.length ? '' : ' disabled') + '>加入今日词并学习</button></div>' +
+      '</div>';
+    if (!recs.length) {
+      out += '<div class="daily-word-empty font-cjk">这本书暂时没有新的高频生词。继续阅读几页，或者换一本书后再看推荐。</div></section>';
+      return out;
+    }
+    out += '<div class="daily-word-grid">';
+    recs.forEach(function (r) {
+      var meaning = shortSense(r.entry && r.entry.trans) || '暂无释义';
+      var tag = r.entry && r.entry.tag ? String(r.entry.tag).split(/\s+/).filter(Boolean)[0] : '';
+      var ex = r.examples && r.examples[0];
+      out += '<article class="daily-word-tile">' +
+        '<div class="daily-word-main">' +
+          '<div><strong class="daily-word-word font-display">' + esc(r.lemma) + '</strong>' +
+          '<p class="daily-word-meaning font-cjk">' + esc(meaning) + '</p></div>' +
+          '<button class="daily-word-add" data-daily-add="' + esc(r.lemma) + '" title="加入生词库">＋</button>' +
+        '</div>' +
+        '<div class="daily-word-meta font-mono"><span>出现 ' + r.count + ' 次</span><span>' + r.articleHits + ' 篇</span>' + (tag ? '<span>' + esc(tag) + '</span>' : '') + '</div>' +
+        (ex ? '<p class="daily-word-context font-reading">' + highlightInSentence(ex.sentence, ex.surface) + '</p>' : '') +
+      '</article>';
+    });
+    out += '</div></section>';
+    return out;
+  }
+
   function renderStudySetSelect(opts, selectedId) {
     var html = '<div class="daily-filter"><label class="font-cjk" for="review-book-select">学习集</label>' +
       '<select class="sort" id="review-book-select">';
@@ -2361,9 +2566,10 @@
       return out;
     }
     if (!nL) {
+      out += renderDailyWordRecommendations();
       out += '<div class="review-empty-panel"><div class="circle">' + I.sparkles + '</div>' +
         '<h3 class="font-display">还没有可复习的词</h3>' +
-        '<p class="font-cjk">先去阅读点词，或直接新建一个学习集。</p></div></div></div>';
+        '<p class="font-cjk">可以先加入今日推荐，或直接新建一个学习集。</p></div></div></div>';
       return out;
     }
 
@@ -2374,6 +2580,8 @@
         '<span>待学习 ' + due + '</span>' +
         '<span>' + esc(rank.code) + '</span>' +
       '</div></div>';
+
+    out += renderDailyWordRecommendations();
 
     out += '<div class="mode-grid">';
     MODES.forEach(function (m) {
@@ -4341,6 +4549,14 @@
         startStudyMode(b.getAttribute('data-mode'));
       });
     });
+    document.querySelectorAll('[data-daily-add]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        addDailyRecommendationWord(b.getAttribute('data-daily-add'));
+      });
+    });
+    if ($('daily-rec-start')) $('daily-rec-start').addEventListener('click', startDailyRecommendedWords);
     // ----- 学习集首页：继续学习 / 统计 / 每日目标 -----
     if ($('review-book-select')) $('review-book-select').addEventListener('change', function (e) {
       if (!state.stats) state.stats = defaultStats();
