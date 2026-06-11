@@ -1133,7 +1133,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.6 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.7 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1151,7 +1151,7 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.6 · local</span></div>' +
+      '<span class="ver font-mono">1.8.7 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
@@ -2913,27 +2913,6 @@
   function sentenceKey(sentence) {
     return String(sentence || '').replace(/\s+/g, ' ').trim();
   }
-  function sentenceGlossary(sentence) {
-    var seen = {}, out = [];
-    var tokens = String(sentence || '').match(/[a-zA-Z]+(?:['’\-][a-zA-Z]+)*/g) || [];
-    tokens.forEach(function (tok) {
-      var found = lookupWord(tok);
-      if (!found || !found.entry) return;
-      var lemma = found.lemma.toLowerCase();
-      if (seen[lemma]) return;
-      if (isDailyFunctionWord(lemma, found.entry)) return;
-      var meaning = shortSense(found.entry.trans);
-      if (!meaning) return;
-      seen[lemma] = 1;
-      out.push({ lemma: lemma, meaning: meaning, freq: dictFreq(lemma), len: lemma.length });
-    });
-    out.sort(function (a, b) {
-      var af = isFinite(a.freq) ? freqWeight(a.freq) : 0.1;
-      var bf = isFinite(b.freq) ? freqWeight(b.freq) : 0.1;
-      return (bf + b.len / 16) - (af + a.len / 16);
-    });
-    return out.slice(0, 6);
-  }
   function fetchSentenceTranslation(sentence) {
     var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=' +
       encodeURIComponent(sentenceKey(sentence));
@@ -2967,11 +2946,11 @@
       render();
       return;
     }
-    var base = { key: key, text: key, rect: rect || null, loading: true, translation: '', error: '', glossary: sentenceGlossary(key) };
+    var base = { key: key, text: key, rect: rect || null, loading: true, translation: '', error: '' };
     state.sentenceTrans = base;
     render();
     fetchSentenceTranslation(key).then(function (translation) {
-      var done = { key: key, text: key, loading: false, translation: translation, error: '', glossary: sentenceGlossary(key) };
+      var done = { key: key, text: key, loading: false, translation: translation, error: '' };
       SENTENCE_TRANSLATION_CACHE[key] = done;
       if (state.sentenceTrans && state.sentenceTrans.key === key) {
         state.sentenceTrans = Object.assign({}, done, { rect: rect || null });
@@ -2980,8 +2959,7 @@
     }).catch(function (err) {
       var fail = {
         key: key, text: key, loading: false, translation: '',
-        error: (err && err.message) ? err.message : '在线翻译失败，先看关键词拆解。',
-        glossary: sentenceGlossary(key)
+        error: (err && err.message) ? err.message : '在线翻译失败。'
       };
       if (state.sentenceTrans && state.sentenceTrans.key === key) {
         state.sentenceTrans = Object.assign({}, fail, { rect: rect || null });
@@ -3001,13 +2979,6 @@
       out += '<div class="sent-cn">' + esc(st.translation) + '</div>';
     } else if (st.error) {
       out += '<div class="sent-error">' + esc(st.error) + '</div>';
-    }
-    if (st.glossary && st.glossary.length) {
-      out += '<div class="sent-gloss">';
-      st.glossary.forEach(function (g) {
-        out += '<span><b class="font-display">' + esc(g.lemma) + '</b>' + esc(g.meaning) + '</span>';
-      });
-      out += '</div>';
     }
     out += '</div>';
     return out;
