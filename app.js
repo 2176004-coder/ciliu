@@ -1133,7 +1133,7 @@
     var html = '';
     if (state.booting) {
       app.innerHTML = '<div class="boot-screen">' +
-        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.7 · local</span></div>' +
+        '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1><span class="ver font-mono">1.8.8 · local</span></div>' +
         '<div class="loading font-cjk">' + I.loader + '<span>' + esc(state.bootMsg || '正在加载…') + '</span></div>' +
         '</div>';
       return;
@@ -1151,7 +1151,7 @@
     }
     html += '<header><div class="wrap-wide head-inner">' +
       '<div class="brand"><h1 class="font-display">词流<span class="dot">.</span></h1>' +
-      '<span class="ver font-mono">1.8.7 · local</span></div>' +
+      '<span class="ver font-mono">1.8.8 · local</span></div>' +
       '<nav>' +
         tabBtn('reading', '阅读', I.bookOpen) +
         tabBtn('vocab', '词汇', I.bookMarked) +
@@ -2972,7 +2972,6 @@
     if (!st || !st.key) return '';
     var out = '<div class="sentence-popover font-cjk" id="sentence-popover" style="' + sentencePopoverStyle(st.rect) + '">' +
       '<div class="sent-head"><span>句子翻译</span><button class="icon-btn" id="sentence-close" title="关闭">' + I.x + '</button></div>';
-    out += '<div class="sent-source font-reading">' + esc(st.text) + '</div>';
     if (st.loading) {
       out += '<div class="sent-loading">正在翻译选中的句子…</div>';
     } else if (st.translation) {
