@@ -237,6 +237,7 @@
     customBooks: [], composingBook: false, newBookName: '', newBookWords: '', addWordsTo: null,
     composingStudySet: false, newStudySetName: '', newStudySetWords: '',
     stats: null, reviewView: 'home',
+    dailyRecExpanded: false,
     autoSpeak: true,
     review: null,
     importing: null,
@@ -246,6 +247,7 @@
     showRankGuide: false,
     rankUp: null,
     transExpanded: false,
+    sentenceTrans: null,
     readProgress: {},
     articlePage: 0,
     booting: true,
@@ -2281,6 +2283,7 @@
   }
 
   var DAILY_WORD_LIMIT = 8;
+  var DAILY_WORD_EXPANDED_LIMIT = 24;
   var DAILY_REC_CACHE = { sig: '', pack: null };
   var DAILY_FUNCTION_WORDS = {
     a:1, an:1, the:1, and:1, or:1, but:1, if:1, because:1, as:1, than:1, then:1, so:1,
@@ -2427,7 +2430,7 @@
   }
 
   function addDailyRecommendationWord(lemma) {
-    var pack = dailyWordRecommendationPack(DAILY_WORD_LIMIT);
+    var pack = dailyWordRecommendationPack(state.dailyRecExpanded ? DAILY_WORD_EXPANDED_LIMIT : DAILY_WORD_LIMIT);
     var rec = pack.recs.find(function (r) { return r.lemma === String(lemma || '').toLowerCase(); });
     var id = ensureDailyRecommendedWord(lemma, rec);
     if (!id) { alert('这个词已经在生词库或已掌握里了。'); return; }
@@ -2436,7 +2439,7 @@
   }
 
   function startDailyRecommendedWords() {
-    var pack = dailyWordRecommendationPack(DAILY_WORD_LIMIT);
+    var pack = dailyWordRecommendationPack(state.dailyRecExpanded ? DAILY_WORD_EXPANDED_LIMIT : DAILY_WORD_LIMIT);
     var ids = [];
     pack.recs.forEach(function (rec) {
       var id = ensureDailyRecommendedWord(rec.lemma, rec);
@@ -2452,15 +2455,21 @@
   }
 
   function renderDailyWordRecommendations() {
-    var pack = dailyWordRecommendationPack(DAILY_WORD_LIMIT);
+    var visibleLimit = state.dailyRecExpanded ? DAILY_WORD_EXPANDED_LIMIT : DAILY_WORD_LIMIT;
+    var pack = dailyWordRecommendationPack(visibleLimit);
     var recs = pack.recs;
+    var hiddenCount = Math.max(0, pack.total - recs.length);
+    var canToggle = pack.total > DAILY_WORD_LIMIT;
     var source = pack.scope && pack.scope.shelf ? pack.scope.shelf : '当前书籍';
     var out = '<section class="daily-word-rec">' +
       '<div class="daily-word-head">' +
         '<div><div class="daily-word-kicker font-cjk">每日生词推荐</div>' +
         '<h3 class="font-display">今天先背这' + (recs.length ? ' ' + recs.length + ' ' : '几') + '个</h3>' +
         '<p class="font-cjk">根据《' + esc(source) + '》里尚未掌握、未加入生词库的出现频率排序。</p></div>' +
-        '<div class="daily-word-actions"><button class="btn-pill" id="daily-rec-start"' + (recs.length ? '' : ' disabled') + '>加入今日词并学习</button></div>' +
+        '<div class="daily-word-actions">' +
+          (canToggle ? '<button class="btn-ghost daily-word-toggle" id="daily-rec-toggle">' + (state.dailyRecExpanded ? '收起' : '展开更多' + (hiddenCount ? ' +' + Math.min(hiddenCount, DAILY_WORD_EXPANDED_LIMIT - DAILY_WORD_LIMIT) : '')) + '</button>' : '') +
+          '<button class="btn-pill" id="daily-rec-start"' + (recs.length ? '' : ' disabled') + '>加入' + recs.length + '个并学习</button>' +
+        '</div>' +
       '</div>';
     if (!recs.length) {
       out += '<div class="daily-word-empty font-cjk">这本书暂时没有新的高频生词。继续阅读几页，或者换一本书后再看推荐。</div></section>';
@@ -2897,6 +2906,102 @@
     return { primary: lines[pick], rest: rest };
   }
 
+  var SENTENCE_TRANSLATION_CACHE = {};
+  function sentenceKey(sentence) {
+    return String(sentence || '').replace(/\s+/g, ' ').trim();
+  }
+  function sentenceGlossary(sentence) {
+    var seen = {}, out = [];
+    var tokens = String(sentence || '').match(/[a-zA-Z]+(?:['’\-][a-zA-Z]+)*/g) || [];
+    tokens.forEach(function (tok) {
+      var found = lookupWord(tok);
+      if (!found || !found.entry) return;
+      var lemma = found.lemma.toLowerCase();
+      if (seen[lemma]) return;
+      if (isDailyFunctionWord(lemma, found.entry)) return;
+      var meaning = shortSense(found.entry.trans);
+      if (!meaning) return;
+      seen[lemma] = 1;
+      out.push({ lemma: lemma, meaning: meaning, freq: dictFreq(lemma), len: lemma.length });
+    });
+    out.sort(function (a, b) {
+      var af = isFinite(a.freq) ? freqWeight(a.freq) : 0.1;
+      var bf = isFinite(b.freq) ? freqWeight(b.freq) : 0.1;
+      return (bf + b.len / 16) - (af + a.len / 16);
+    });
+    return out.slice(0, 6);
+  }
+  function fetchSentenceTranslation(sentence) {
+    var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=' +
+      encodeURIComponent(sentenceKey(sentence));
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error('翻译服务暂时不可用');
+      return res.json();
+    }).then(function (data) {
+      var pieces = (data && data[0]) ? data[0].map(function (seg) { return seg && seg[0] ? seg[0] : ''; }) : [];
+      var text = pieces.join('').trim();
+      if (!text) throw new Error('没有拿到翻译结果');
+      return text;
+    });
+  }
+  function translateSelectedSentence() {
+    var sel = state.selected;
+    if (!sel || !sel.sentence) return;
+    var key = sentenceKey(sel.sentence);
+    if (!key) return;
+    if (SENTENCE_TRANSLATION_CACHE[key]) {
+      state.sentenceTrans = SENTENCE_TRANSLATION_CACHE[key];
+      render();
+      return;
+    }
+    var base = { key: key, text: sel.sentence, loading: true, translation: '', error: '', glossary: sentenceGlossary(sel.sentence) };
+    state.sentenceTrans = base;
+    render();
+    fetchSentenceTranslation(sel.sentence).then(function (translation) {
+      var done = { key: key, text: sel.sentence, loading: false, translation: translation, error: '', glossary: sentenceGlossary(sel.sentence) };
+      SENTENCE_TRANSLATION_CACHE[key] = done;
+      if (state.selected && sentenceKey(state.selected.sentence) === key) {
+        state.sentenceTrans = done;
+        render();
+      }
+    }).catch(function (err) {
+      var fail = {
+        key: key, text: sel.sentence, loading: false, translation: '',
+        error: (err && err.message) ? err.message : '在线翻译失败，先看关键词拆解。',
+        glossary: sentenceGlossary(sel.sentence)
+      };
+      if (state.selected && sentenceKey(state.selected.sentence) === key) {
+        state.sentenceTrans = fail;
+        render();
+      }
+    });
+  }
+  function renderSentenceAssist(sel) {
+    if (!sel || !sel.sentence) return '';
+    var key = sentenceKey(sel.sentence);
+    var st = state.sentenceTrans && state.sentenceTrans.key === key ? state.sentenceTrans : null;
+    var btnText = st && st.loading ? '翻译中…' : (st && st.translation ? '已翻译本句' : (st && st.error ? '重试翻译本句' : '在线翻译本句'));
+    var out = '<button class="pop-btn ghost small font-display" id="sentence-translate"' + (st && st.loading ? ' disabled' : '') + '>' + btnText + '</button>';
+    if (!st) return out;
+    out += '<div class="sentence-assist font-cjk">';
+    if (st.loading) {
+      out += '<div class="sent-loading">正在翻译这句话…</div>';
+    } else if (st.translation) {
+      out += '<div class="sent-cn">' + esc(st.translation) + '</div>';
+    } else if (st.error) {
+      out += '<div class="sent-error">' + esc(st.error) + '</div>';
+    }
+    if (st.glossary && st.glossary.length) {
+      out += '<div class="sent-gloss">';
+      st.glossary.forEach(function (g) {
+        out += '<span><b class="font-display">' + esc(g.lemma) + '</b>' + esc(g.meaning) + '</span>';
+      });
+      out += '</div>';
+    }
+    out += '</div>';
+    return out;
+  }
+
   function renderPanel() {
     var sel = state.selected, lk = state.lookup || {};
     var d = lk.data || {};
@@ -2929,6 +3034,7 @@
     }
 
     html += '<div class="pop-foot">';
+    html += renderSentenceAssist(sel);
     if (sel.status === 'known') {
       html += '<button class="pop-btn ghost font-display" id="demote">' + I.bookMarked + ' 移回生词</button>';
     } else if (sel.status === 'green') {
@@ -2949,6 +3055,7 @@
     var rc = rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null;
     state.selected = { surface: surface, sentence: sentence, si: si, status: st, handled: false, rect: rc };
     state.transExpanded = false; // 每次点新词默认收起多余义项
+    if (state.sentenceTrans && state.sentenceTrans.key !== sentenceKey(sentence)) state.sentenceTrans = null;
 
     // 释义：已在生词库的优先用已存数据，否则查词典
     var sl = surface.toLowerCase(), lem = resolveLemma(surface);
@@ -4531,6 +4638,7 @@
     bindTap('mark-known', markKnown);
     bindTap('demote', demoteToLearning);
     bindTap('trans-toggle', function () { state.transExpanded = !state.transExpanded; render(); });
+    bindTap('sentence-translate', translateSelectedSentence);
     bindTap('speak-word', function () {
       var d = state.lookup && state.lookup.data;
       speak((d && d.lemma) || (state.selected && state.selected.surface));
@@ -4555,6 +4663,10 @@
         e.stopPropagation();
         addDailyRecommendationWord(b.getAttribute('data-daily-add'));
       });
+    });
+    if ($('daily-rec-toggle')) $('daily-rec-toggle').addEventListener('click', function () {
+      state.dailyRecExpanded = !state.dailyRecExpanded;
+      render();
     });
     if ($('daily-rec-start')) $('daily-rec-start').addEventListener('click', startDailyRecommendedWords);
     // ----- 学习集首页：继续学习 / 统计 / 每日目标 -----

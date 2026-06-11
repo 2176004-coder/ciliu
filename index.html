@@ -518,6 +518,12 @@
   .pop-btn.ghost{ background:transparent; color:var(--inkSoft); border:1px solid var(--borderStrong); }
   .pop-btn.small{ padding:7px; font-size:13px; color:var(--inkMuted); }
   .pop-btn.small svg{ width:14px; height:14px; }
+  .sentence-assist{ margin-top:-2px; padding:10px; border-radius:9px; background:rgba(199,123,58,.08); border:1px solid rgba(199,123,58,.14); }
+  .sent-cn{ color:var(--ink); font-size:14px; line-height:1.6; }
+  .sent-loading,.sent-error{ color:var(--inkMuted); font-size:13px; line-height:1.5; }
+  .sent-gloss{ display:flex; flex-direction:column; gap:5px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
+  .sent-gloss span{ color:var(--inkSoft); font-size:12px; line-height:1.45; }
+  .sent-gloss b{ color:var(--accentDeep); margin-right:6px; font-size:13px; }
   .popover button{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; user-select:none; }
   .pop-spk{ padding:6px; border-radius:8px; color:var(--accentDeep); flex-shrink:0; }
   .pop-spk:hover{ background:rgba(199,123,58,0.12); }
@@ -549,6 +555,7 @@
   .daily-word-head h3{ margin:0; color:var(--rv-text); font-size:26px; line-height:1.1; font-weight:650; }
   .daily-word-head p{ margin:7px 0 0; color:var(--rv-muted); font-size:13px; line-height:1.45; }
   .daily-word-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+  .daily-word-actions .btn-ghost{ min-height:34px; padding:8px 12px; border:1px solid var(--border); background:var(--bg); color:var(--accentDeep); white-space:nowrap; }
   .daily-word-grid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
   .daily-word-tile{ min-width:0; min-height:154px; padding:13px; border-radius:10px; border:1px solid var(--border); background:var(--bg); display:flex; flex-direction:column; gap:10px; box-shadow:none; }
   .daily-word-main{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; min-width:0; }
